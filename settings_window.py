@@ -49,6 +49,39 @@ VK_NAMES.update({
 MODIFIER_KEYSYMS = ("Control_L", "Control_R", "Alt_L", "Alt_R", "Shift_L",
                     "Shift_R", "Win_L", "Win_R", "Super_L", "Super_R")
 
+# Combinations that must never be bound. A matched hotkey is SWALLOWED, so
+# binding ctrl+c would stop copy working everywhere on the machine with no
+# visible cause. Anything with a single modifier is refused outright - that is
+# where the universal shortcuts live - along with a few two-modifier ones the
+# system or every application already owns.
+RESERVED = {
+    "ctrl+shift+esc",   # Task Manager
+    "ctrl+alt+delete",  # cannot be hooked anyway
+    "alt+tab", "alt+esc", "alt+space", "alt+f4",
+    "win+l", "win+d", "win+e", "win+r", "win+tab",
+}
+
+
+def unsafe_hotkey(spec):
+    """Return why a combination must not be bound, or None if it is fine.
+
+    Duplicated in phantommonitor.py rather than shared: this runs as its own
+    process and importing the main module there would re-execute it.
+    """
+    spec = (spec or "").strip().lower()
+    if not spec:
+        return None
+    parts = [p for p in spec.split("+") if p]
+    mods = [p for p in parts if p in ("ctrl", "alt", "shift", "win")]
+    if len(parts) < 2 or not mods:
+        return "needs at least one modifier"
+    if len(mods) < 2:
+        return ("needs two modifiers - one is where the shortcuts everything "
+                "already uses live, like ctrl+c")
+    if spec in RESERVED:
+        return "Windows or every application already uses this"
+    return None
+
 
 def held_modifiers():
     """Read the modifier keys directly rather than from the Tk event.
@@ -71,7 +104,7 @@ def held_modifiers():
     return mods
 
 
-def capture_hotkey(event, var):
+def capture_hotkey(event, var, warn=None):
     """Turn a real keystroke into a config string.
 
     Only captures when a modifier is held, so ordinary typing and pasting still
@@ -103,7 +136,16 @@ def capture_hotkey(event, var):
     if not name:
         return "break"
 
-    var.set("+".join(mods + [name]))
+    spec = "+".join(mods + [name])
+    problem = unsafe_hotkey(spec)
+    if problem:
+        var.set("")
+        if warn is not None:
+            warn("%s is not allowed: %s" % (spec, problem))
+        return "break"
+    if warn is not None:
+        warn("")
+    var.set(spec)
     return "break"
 
 
@@ -184,6 +226,10 @@ def run(config_path, monitors):
     # --- hotkeys ------------------------------------------------------------
     keys = ttk.LabelFrame(root, text="Hotkeys")
     keys.grid(row=2, column=0, sticky="ew", **pad)
+    warning = tk.StringVar(value="")
+
+    def warn(text):
+        warning.set(text)
     hotkeys = dict(cfg.get("hotkeys") or {})
     entries = {}
     rows = [("rescue", "Rescue windows (also recovers off-screen ones)")]
@@ -195,12 +241,14 @@ def run(config_path, monitors):
         entries[key] = var
         field = ttk.Entry(keys, textvariable=var, width=22)
         field.grid(row=row, column=1, padx=10)
-        field.bind("<KeyPress>", lambda e, v=var: capture_hotkey(e, v))
+        field.bind("<KeyPress>", lambda e, v=var: capture_hotkey(e, v, warn))
     ttk.Label(keys, text="Click a box and press the combination you want — no need to\n"
                          "type it. Delete clears one. Typing still works if you prefer.\n"
                          "Matched combos are swallowed, so avoid ones your games use.",
               foreground="#555").grid(row=len(rows), column=0, columnspan=2,
-                                      sticky="w", padx=10, pady=(2, 8))
+                                      sticky="w", padx=10, pady=(2, 2))
+    ttk.Label(keys, textvariable=warning, foreground="#b00").grid(
+        row=len(rows) + 1, column=0, columnspan=2, sticky="w", padx=10, pady=(0, 8))
 
     status = tk.StringVar(value="")
     ttk.Label(root, textvariable=status, foreground="#0a7").grid(

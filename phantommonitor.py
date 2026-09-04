@@ -1293,6 +1293,33 @@ def parse_hotkey(spec):
     return mods | MOD_NOREPEAT, vk
 
 
+# Never bind these. A matched hotkey is swallowed before it reaches the focused
+# application, so binding ctrl+c would stop copy working everywhere on the
+# machine with no visible cause. Duplicated in settings_window.py, which runs as
+# its own process where importing this module would re-execute it.
+RESERVED_HOTKEYS = {
+    "ctrl+shift+esc", "ctrl+alt+delete",
+    "alt+tab", "alt+esc", "alt+space", "alt+f4",
+    "win+l", "win+d", "win+e", "win+r", "win+tab",
+}
+
+
+def unsafe_hotkey(spec):
+    """Why a combination must not be bound, or None if it is fine."""
+    spec = (spec or "").strip().lower()
+    if not spec:
+        return None
+    parts = [p for p in spec.split("+") if p]
+    mods = [p for p in parts if p in ("ctrl", "alt", "shift", "win")]
+    if len(parts) < 2 or not mods:
+        return "needs at least one modifier"
+    if len(mods) < 2:
+        return "needs two modifiers, or it would swallow a shortcut everything uses"
+    if spec in RESERVED_HOTKEYS:
+        return "Windows or every application already uses it"
+    return None
+
+
 def resolve_hotkeys(cfg):
     """Config -> {action: (mods, vk)}, where action 0 = rescue, N = monitor N."""
     table = cfg.get("hotkeys")
@@ -1308,6 +1335,10 @@ def resolve_hotkeys(cfg):
     out = {}
     for name, spec in table.items():
         if not spec:
+            continue
+        problem = unsafe_hotkey(spec)
+        if problem:
+            log.warning("refusing hotkey %r for %r: %s", spec, name, problem)
             continue
         combo = parse_hotkey(spec)
         if not combo:

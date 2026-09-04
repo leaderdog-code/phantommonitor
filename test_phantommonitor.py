@@ -395,6 +395,21 @@ check("restoring the snapshot puts it back exactly",
 check("a dead window is never displaced",
       not mg.window_displaced(999999999, snapshot, cfg))
 
+# 21 - hotkeys are swallowed when matched, so binding one modifier plus a
+#      letter would stop a universal shortcut working machine-wide.
+for spec, allowed in [("ctrl+c", False), ("ctrl+v", False), ("alt+f4", False),
+                      ("win+l", False), ("ctrl+shift+esc", False),
+                      ("4", False), ("ctrl+alt+shift+4", True),
+                      ("ctrl+alt+1", True), ("ctrl+shift+f9", True)]:
+    refused = mg.unsafe_hotkey(spec) is not None
+    check(("allows " if allowed else "refuses ") + spec, refused != allowed,
+          mg.unsafe_hotkey(spec) or "")
+check("a blank hotkey is simply disabled, not an error",
+      mg.unsafe_hotkey("") is None)
+check("unsafe entries are dropped when resolving",
+      sorted(mg.resolve_hotkeys({"hotkeys": {"rescue": "ctrl+c",
+                                             "monitor_1": "ctrl+alt+shift+1"}})) == [1])
+
 root.destroy()
 print()
 failed = [r for r in results if r[0] == FAIL]
