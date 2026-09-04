@@ -25,3 +25,6 @@ build/*.spec
 
 # Throwaway diagnostics with this machine's hardware ids baked in
 watch_amp.py
+
+# Release bodies are drafted locally and live on the release itself
+RELEASE_NOTES_*.md
