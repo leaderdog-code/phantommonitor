@@ -202,6 +202,9 @@ toggles, moving the current window, and the file actions.
 | `DON0015@800x600` | Block only at exactly that size |
 | `DON0015@<1280x720` | Block only while it has **fewer pixels** than that |
 
+Start with the plain form. The qualified one only helps if your amp advertises
+something small when nothing is attached, and plenty do not — see below.
+
 The `<` form exists for "I might plug a real screen in later" — **but only some
 receivers make it possible**, so check yours before relying on it.
 
@@ -211,11 +214,15 @@ phantom and stops matching when a real screen appears, so blocking turns itself
 on and off with no clicking. A Denon tested here behaves that way, falling back
 to 800×600 a few minutes after a screen goes dark.
 
-A receiver that reports the same EDID regardless gives you no signal at all. A
-Yamaha tested on a native HDMI port did exactly this: the resolution did not
-change when the screen behind it was switched off. **Use a plain hardware id and
-tick it when you want that display**, exactly as you would for a monitor you are
-reserving.
+Other receivers give you no signal at all, and this is the more common case.
+A **Yamaha HTR-4063** tested on a native HDMI port advertises **1920×1080 with
+nothing attached to it whatsoever** — a phantom indistinguishable from a real
+monitor by resolution alone. No size rule can catch that, at any threshold.
+**Use a plain hardware id and tick it when you want that display**, exactly as
+you would for a monitor you are reserving.
+
+So reach for the plain form first. The qualified form is a bonus that works only
+if your amp happens to fall back to something small.
 
 Run `PhantomMonitor.exe --diag` with a screen awake behind the amp and again
 with it off. If the reported resolution changes, the qualified rule will work.
@@ -463,13 +470,13 @@ every monitor and reshuffles your windows and desktop icons.
   drops a cached EDID a few minutes after the screen goes dark and blocking
   resumes then; an adapter or a TV's own quick-start standby may hold it
   indefinitely, and then blocking is a tick in the settings.
-- **Receivers differ, and not by a little.** Both of these were tested on a
-  native HDMI port, so the comparison is clean. A **Denon** drops to a 800×600
-  fallback EDID a few minutes after the screen behind it goes dark, which is
-  what makes automatic blocking possible. A **Yamaha** reports the same EDID
-  whether or not anything is awake, so there is no signal to detect and
-  blocking is a manual tick. Assume nothing about your own amp until `--diag`
-  tells you which kind it is.
+- **Receivers differ enormously.** Both tested on a native HDMI port, so the
+  comparison is clean. A **Denon AVR** drops to a 800×600 fallback EDID a few
+  minutes after the screen behind it goes dark, which is what makes automatic
+  blocking possible at all. A **Yamaha HTR-4063** advertises **1920×1080 with
+  nothing attached** — a phantom that no size rule can distinguish from a real
+  monitor. Assume nothing about your own amp until `--diag` tells you what it
+  reports with nothing plugged into it.
 - An adapter in the path removes the question entirely: an active
   DisplayPort-to-HDMI converter regenerates the link, so the card sees the
   adapter rather than whatever is behind it, and nothing changes when a screen
