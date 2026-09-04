@@ -1,0 +1,353 @@
+"""End-to-end check: park real windows on the Denon, confirm the guard evacuates them."""
+import sys, time, tkinter as tk
+sys.path.insert(0, r"C:\Users\Ray\tools\phantommonitor")
+
+import win32con, win32gui
+import phantommonitor as mg
+
+mg.setup_logging("INFO")
+mg.set_dpi_awareness()
+
+if win32gui.FindWindow("PhantomMonitorWnd", None):
+    print("The PhantomMonitor tray app is running and will fight these tests "
+          "(it rescues the fixtures mid-assertion). Stop it first.")
+    sys.exit(2)
+
+cfg = mg.load_config()
+# Force an unqualified rule: these tests must behave the same whether or not a
+# real screen happens to be plugged into the amp right now.
+cfg["blocked_hwids"] = ["DON0015"]
+guard = mg.Guard(cfg)
+
+
+class FakeMon:
+    """Stand-in so size rules can be checked without depending on the live mode."""
+    def __init__(self, w, h, hwid="DON0015"):
+        self.hwid = hwid
+        self.rect = (0, 0, w, h)
+denon = next(m for m in guard.monitors if m.hwid == "DON0015")
+print("target-to-avoid:", denon.label(), denon.rect)
+print("rescue target  :", guard.rescue_target().label())
+print()
+
+root = tk.Tk()
+root.title("PhantomMonitor Test Window")
+root.geometry("500x350")
+root.update()
+hwnd = win32gui.GetAncestor(root.winfo_id(), win32con.GA_ROOT)
+
+PASS, FAIL = "PASS", "FAIL"
+results = []
+
+
+def where(h):
+    return mg.monitor_of_rect(win32gui.GetWindowRect(h), guard.monitors)
+
+
+def park_on_denon(x_off=60, y_off=40, w=500, h=350):
+    win32gui.SetWindowPos(hwnd, 0, denon.rect[0] + x_off, denon.rect[1] + y_off, w, h,
+                          win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+    root.update()
+
+
+def check(name, condition, detail=""):
+    results.append((PASS if condition else FAIL, name, detail))
+    print("%-5s %-34s %s" % (PASS if condition else FAIL, name, detail))
+
+
+# 1 - a normal window sitting on the blocked display
+park_on_denon()
+check("parked on Denon", where(hwnd).hwid == "DON0015", str(win32gui.GetWindowRect(hwnd)))
+moved = guard.sweep("test")
+check("sweep evacuates it", moved >= 1 and where(hwnd).hwid != "DON0015",
+      "moved %d; test window now on %s %s"
+      % (moved, where(hwnd).name, win32gui.GetWindowRect(hwnd)))
+
+# 2 - sweep must be a no-op once it is on a good display
+check("second sweep is a no-op", guard.sweep("test") == 0)
+
+# 3 - a maximized window must come back still maximized
+park_on_denon()
+win32gui.ShowWindow(hwnd, win32con.SW_MAXIMIZE)
+root.update()
+guard.sweep("test")
+root.update()
+still_max = win32gui.GetWindowPlacement(hwnd)[1] == win32con.SW_SHOWMAXIMIZED
+check("maximized window rescued", where(hwnd).hwid != "DON0015" and still_max,
+      "maximized=%s on %s" % (still_max, where(hwnd).name))
+win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+root.update()
+
+# 4 - a minimized window's restore position must be rewritten so it does not pop back
+park_on_denon()
+win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+root.update()
+guard.sweep("test")
+placement = win32gui.GetWindowPlacement(hwnd)
+ox, oy = guard.workspace_offset()
+normal = placement[4]
+restore_rect = (normal[0] + ox, normal[1] + oy, normal[2] + ox, normal[3] + oy)
+restore_mon = mg.monitor_of_rect(restore_rect, guard.monitors)
+check("minimized restore point fixed", restore_mon.hwid != "DON0015",
+      "reappears on %s %s" % (restore_mon.name, restore_rect))
+win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+root.update()
+check("restores off the Denon", where(hwnd).hwid != "DON0015", where(hwnd).name)
+
+# 5 - window size must be preserved across the move
+park_on_denon(w=640, h=480)
+guard.sweep("test")
+left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+check("size preserved", (right - left, bottom - top) == (640, 480),
+      "%dx%d" % (right - left, bottom - top))
+
+# 6 - guard must stand down rather than block every display
+cfg["blocked_hwids"] = [m.hwid for m in guard.monitors]
+check("refuses to block everything", guard.blocked() == [])
+cfg["blocked_hwids"] = ["DON0015"]
+
+# 7 - paused guard must not move anything
+cfg["enabled"] = False
+park_on_denon()
+check("paused guard does nothing", guard.sweep("test") == 0 and where(hwnd).hwid == "DON0015")
+cfg["enabled"] = True
+guard.sweep("test")
+
+# 8 - shell furniture must never be considered movable
+desktop = win32gui.FindWindow("Progman", None)
+check("skips the desktop window", not mg.is_manageable(desktop, cfg) if desktop else True)
+
+# 9 - windows deliberately parked far off-screen must be left alone. The old
+#     nearest-monitor fallback attributed them to the Denon and hauled them in.
+win32gui.SetWindowPos(hwnd, 0, -32000, -32000, 400, 300,
+                      win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+root.update()
+parked = win32gui.GetWindowRect(hwnd)
+check("off-screen window not claimed",
+      mg.monitor_of_rect(parked, guard.monitors, require_overlap=True) is None
+      and not guard.check_window(hwnd, "test"), str(parked))
+
+# 10 - a borderless full-screen window (the 800x600 RDP slab) must be refitted
+#      to the destination, not carried across at the blocked monitor's size.
+top = tk.Toplevel(root)
+top.geometry("300x200")
+top.update()
+thwnd = win32gui.GetAncestor(top.winfo_id(), win32con.GA_ROOT)
+# Strip the caption and resize frame the way mstsc does going full-screen.
+# Not overrideredirect: Tk sets WS_EX_TOOLWINDOW for that, which the guard
+# skips by design, whereas real mstsc had exstyle 0x00000000.
+_s = win32gui.GetWindowLong(thwnd, win32con.GWL_STYLE)
+win32gui.SetWindowLong(thwnd, win32con.GWL_STYLE,
+                       _s & ~(win32con.WS_CAPTION | win32con.WS_THICKFRAME))
+win32gui.SetWindowPos(thwnd, 0, denon.rect[0], denon.rect[1],
+                      denon.rect[2] - denon.rect[0], denon.rect[3] - denon.rect[1],
+                      win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+top.update()
+check("borderless fullscreen detected",
+      mg.covers_monitor(win32gui.GetWindowRect(thwnd), denon)
+      and not mg.is_user_movable(thwnd))
+guard.check_window(thwnd, "test")
+top.update()
+after = win32gui.GetWindowRect(thwnd)
+target = guard.rescue_target()
+check("app's own window styles untouched", not mg.is_user_movable(thwnd))
+expect = (min(denon.rect[2] - denon.rect[0], target.work[2] - target.work[0]),
+          min(denon.rect[3] - denon.rect[1], target.work[3] - target.work[1]))
+check("keeps its own size", (after[2] - after[0], after[3] - after[1]) == expect,
+      "%dx%d (wanted %dx%d)" % (after[2] - after[0], after[3] - after[1],
+                                expect[0], expect[1]))
+# The regression that mattered: never blown up to cover the whole monitor,
+# which buried the taskbar and system tray.
+check("stays inside the work area",
+      after[0] >= target.work[0] and after[1] >= target.work[1]
+      and after[2] <= target.work[2] and after[3] <= target.work[3],
+      "%s within %s" % (after, target.work))
+
+# The opt-in path still works for apps that tolerate being restyled.
+win32gui.SetWindowPos(thwnd, 0, denon.rect[0], denon.rect[1],
+                      denon.rect[2] - denon.rect[0], denon.rect[3] - denon.rect[1],
+                      win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+top.update()
+cfg["unfullscreen_borderless"] = True
+guard.check_window(thwnd, "test")
+top.update()
+check("opt-in un-fullscreen still available", mg.is_user_movable(thwnd))
+cfg["unfullscreen_borderless"] = False
+top.destroy()
+
+# 11 - the tray-menu path. Opening the menu takes the foreground away from the
+#      user's window, so move_active_to must honour an explicitly captured hwnd
+#      rather than calling GetForegroundWindow() when the item is clicked.
+mon1 = next(m for m in guard.monitors if m.number == 1)
+win32gui.SetWindowPos(hwnd, 0, mon1.work[0] + 200, mon1.work[1] + 200, 500, 350,
+                      win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+root.update()
+ok = guard.move_active_to(2, hwnd, "test")
+root.update()
+check("tray menu moves the captured window", ok and where(hwnd).number == 2,
+      where(hwnd).name)
+check("stale/invalid hwnd rejected", not guard.move_active_to(2, 0, "test"))
+
+# 12 - clicking the tray icon hands the foreground to the taskbar, so the menu
+#      must fall back to the window remembered when it last gained focus.
+check("falls back to last focused window",
+      mg.pick_menu_target(hwnd, cfg, current=0) == hwnd)
+check("prefers the live foreground when usable",
+      mg.pick_menu_target(0, cfg, current=hwnd) == hwnd)
+desktop = win32gui.FindWindow("Progman", None)
+check("never targets shell windows",
+      mg.pick_menu_target(0, cfg, current=desktop) == 0)
+check("drops a window that has since closed",
+      mg.pick_menu_target(999999999, cfg, current=0) == 0)
+
+# 13 - the leave-full-screen path runs on a worker thread and waits for the app
+#      to rebuild. An app that ignores its toggle must still end up moved, and
+#      must never recurse back into the toggle path.
+top2 = tk.Toplevel(root)
+top2.geometry("300x200")
+top2.update()
+t2 = win32gui.GetAncestor(top2.winfo_id(), win32con.GA_ROOT)
+s2 = win32gui.GetWindowLong(t2, win32con.GWL_STYLE)
+win32gui.SetWindowLong(t2, win32con.GWL_STYLE,
+                       s2 & ~(win32con.WS_CAPTION | win32con.WS_THICKFRAME))
+win32gui.SetWindowPos(t2, 0, denon.rect[0], denon.rect[1],
+                      denon.rect[2] - denon.rect[0], denon.rect[3] - denon.rect[1],
+                      win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE
+                      | win32con.SWP_FRAMECHANGED)
+top2.update()
+tk_cls = win32gui.GetClassName(t2)
+mg.FULLSCREEN_TOGGLES[tk_cls] = ("test toggle", mg.MOD_CONTROL | mg.MOD_ALT, 0x03)
+guard.move_window(t2, guard.by_number(2), "test")
+deadline = time.time() + 10
+while time.time() < deadline:
+    top2.update()
+    if mg.monitor_of_rect(win32gui.GetWindowRect(t2), guard.monitors).number == 2:
+        break
+    time.sleep(0.1)
+check("app ignoring its toggle is still moved",
+      mg.monitor_of_rect(win32gui.GetWindowRect(t2), guard.monitors).number == 2,
+      mg.monitor_of_rect(win32gui.GetWindowRect(t2), guard.monitors).name)
+del mg.FULLSCREEN_TOGGLES[tk_cls]
+top2.destroy()
+
+# 14 - a round trip via a smaller display must not permanently shrink a window.
+#      Sized from whatever displays are actually attached, so this holds whether
+#      or not a real screen is plugged into the amp today.
+cfg["blocked_hwids"] = []
+tiny = min(guard.monitors,
+           key=lambda m: (m.work[2] - m.work[0]) * (m.work[3] - m.work[1]))
+big_w = min((tiny.work[2] - tiny.work[0]) + 300, (mon1.work[2] - mon1.work[0]) - 50)
+big_h = min((tiny.work[3] - tiny.work[1]) + 200, (mon1.work[3] - mon1.work[1]) - 50)
+win32gui.SetWindowPos(hwnd, 0, mon1.work[0] + 100, mon1.work[1] + 100, big_w, big_h,
+                      win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+root.update()
+guard.move_active_to(tiny.number, hwnd, "test")
+root.update()
+small = win32gui.GetWindowRect(hwnd)
+guard.move_active_to(1, hwnd, "test")
+root.update()
+back = win32gui.GetWindowRect(hwnd)
+check("smaller display clips it on the way in",
+      (small[2] - small[0]) < big_w or (small[3] - small[1]) < big_h,
+      "%dx%d on %s" % (small[2] - small[0], small[3] - small[1], tiny.name))
+check("original size restored on the way out",
+      (back[2] - back[0], back[3] - back[1]) == (big_w, big_h),
+      "%dx%d (wanted %dx%d)" % (back[2] - back[0], back[3] - back[1], big_w, big_h))
+
+# 15 - moving onto a blocked monitor is refused, rather than starting a fight
+#      with the guard that would yank it straight back.
+cfg["blocked_hwids"] = ["DON0015"]
+check("refuses to move onto a blocked monitor",
+      not guard.move_active_to(3, hwnd, "test"))
+check("still moves to allowed monitors", guard.move_active_to(2, hwnd, "test"))
+
+# 16 - block rules may be qualified by resolution, so the guard stands aside by
+#      itself once a real display appears behind the amp.
+phantom = FakeMon(800, 600)
+check("plain id blocks", mg.monitor_matches_block(phantom, "DON0015"))
+check("matching size blocks", mg.monitor_matches_block(phantom, "DON0015@800x600"))
+check("a different size does not block",
+      not mg.monitor_matches_block(phantom, "DON0015@1920x1080"))
+check("a different id does not block",
+      not mg.monitor_matches_block(phantom, "GSM7814@800x600"))
+check("an unparseable size falls back to id only",
+      mg.monitor_matches_block(phantom, "DON0015@nonsense"))
+# The '<' form: any small fallback EDID is blocked, any real display is not.
+check("smaller-than blocks the 800x600 phantom",
+      mg.monitor_matches_block(phantom, "DON0015@<1280x720"))
+check("smaller-than would allow a real 1080p screen",
+      not mg.monitor_matches_block(mon1, "%s@<1280x720" % mon1.hwid))
+check("smaller-than allows a screen at exactly the threshold",
+      not mg.monitor_matches_block(phantom, "DON0015@<800x600"))
+
+for w, h, should_block, what in [
+    (640, 480, True, "640x480 fallback"),
+    (800, 600, True, "800x600 fallback"),
+    (1024, 768, True, "1024x768 fallback (taller than 720)"),
+    (1280, 720, False, "real 720p TV"),
+    (1366, 768, False, "real 768p TV"),
+    (1920, 1080, False, "real 1080p TV"),
+    (3840, 2160, False, "real 4K TV"),
+]:
+    got = mg.monitor_matches_block(FakeMon(w, h), "DON0015@<1280x720")
+    check(("blocks " if should_block else "allows ") + what, got == should_block)
+
+# 17 - the pointer fence: one rectangle covering every allowed display and no
+#      blocked one, or None when the layout cannot be expressed that way.
+mon2 = next(m for m in guard.monitors if m.number == 2)
+box = mg.cursor_clip_rect(guard.monitors, [denon])
+check("fence excludes the Denon",
+      box is not None and mg.overlap_area(box, denon) == 0, str(box))
+check("fence still covers monitors 1 and 2",
+      all(box[0] <= m.rect[0] and box[1] <= m.rect[1]
+          and box[2] >= m.rect[2] and box[3] >= m.rect[3] for m in (mon1, mon2)))
+check("no fence when nothing is blocked",
+      mg.cursor_clip_rect(guard.monitors, []) is None)
+# Blocking the middle display cannot be fenced with one rectangle - it must
+# refuse rather than lock the pointer out of a display in daily use.
+check("refuses when one rectangle will not do",
+      mg.cursor_clip_rect(guard.monitors, [mon2]) is None)
+
+# 18 - icon layouts are held in screen coordinates, so a display arrangement
+#      never seen before can inherit from the last known one rather than
+#      leaving Explorer's scramble in place.
+sig = mg.topology_signature(guard.monitors)
+origin = mg.virtual_origin(guard.monitors)
+check("an arrangement signature carries its own origin",
+      mg.origin_from_signature(sig) == origin,
+      "%s vs %s" % (mg.origin_from_signature(sig), origin))
+
+v1 = {sig: {"Thing": [10, 20]}}
+v2 = mg.normalize_layouts(v1)
+expect_screen = [10 + origin[0], 20 + origin[1]]
+check("version 1 layouts convert to screen coordinates",
+      v2["layouts"][sig]["Thing"] == expect_screen, str(v2["layouts"][sig]["Thing"]))
+check("version 2 layouts pass through untouched",
+      mg.normalize_layouts(v2)["layouts"][sig]["Thing"] == expect_screen)
+check("a corrupt layout store yields an empty one",
+      mg.normalize_layouts("nonsense")["layouts"] == {})
+check("the last-known arrangement is remembered for fallback",
+      mg.normalize_layouts({"version": 2, "last": sig,
+                            "layouts": {sig: {"Thing": [1, 2]}}})["last"] == sig)
+
+# 19 - hotkeys pin to an EDID hardware id, because display numbers get
+#      reassigned by hot-plugging and Windows numbers by display-config path
+#      order, so "monitor 2" can silently become a different physical screen.
+check("every monitor gets a Windows-matching number",
+      all(m.number > 0 for m in guard.monitors)
+      and len(set(m.number for m in guard.monitors)) == len(guard.monitors),
+      ", ".join("%d=%s" % (m.number, m.hwid) for m in guard.monitors))
+cfg["hotkey_targets"] = {"1": denon.hwid}
+check("a pinned hardware id beats the number", guard.target_for(1) is denon)
+cfg["hotkey_targets"] = {"1": "NOSUCH1"}
+check("an absent pinned monitor falls back to the number",
+      guard.target_for(1) is guard.by_number(1))
+cfg["hotkey_targets"] = {}
+check("with no pin it is a plain number lookup",
+      guard.target_for(1) is guard.by_number(1))
+
+root.destroy()
+print()
+failed = [r for r in results if r[0] == FAIL]
+print("%d/%d checks passed" % (len(results) - len(failed), len(results)))
+sys.exit(1 if failed else 0)

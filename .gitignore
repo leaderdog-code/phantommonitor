@@ -1,0 +1,17 @@
+# Runtime state and logs
+logs/
+__pycache__/
+*.pyc
+
+# Generated on first run
+icon_active.ico
+icon_paused.ico
+
+# Personal data. icon_layouts.json holds the NAME of every desktop item, which
+# is often private - tax documents, medical files, client names. Never commit it.
+icon_layouts.json
+icons_backup*.json
+
+# Machine-specific settings (hardware ids, editor path). config.example.json is
+# the template; PhantomMonitor writes config.json itself on first run.
+config.json

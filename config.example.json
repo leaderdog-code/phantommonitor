@@ -1,0 +1,32 @@
+{
+  "_readme": "Copy to config.json, or just run PhantomMonitor and pick your display from the tray menu - it writes this file for you. Run 'python phantommonitor.py --list' to see the hardware id of each display.",
+  "_blocked_help": "'ABC1234' always blocks that display. 'ABC1234@800x600' blocks it only at exactly that size. 'ABC1234@<1280x720' blocks it only while smaller than that - useful for an AV receiver, which advertises a small fallback EDID with nothing attached and a real resolution once a screen is plugged in, so the guard stands aside by itself.",
+  "blocked_hwids": [],
+  "enabled": true,
+  "_hotkeys_help": "Any mix of ctrl/alt/shift/win plus a letter, digit, F-key or named key (left right up down home end pageup pagedown space insert delete esc tab pause break). Empty string disables one. Matched combos are SWALLOWED and never reach the focused app, so avoid combos your games or apps use.",
+  "hotkeys": {
+    "rescue": "ctrl+alt+shift+0",
+    "monitor_1": "ctrl+alt+shift+1",
+    "monitor_2": "ctrl+alt+shift+2",
+    "monitor_3": "ctrl+alt+shift+3"
+  },
+  "_hotkey_targets_help": "Optional. Pins a hotkey to a display's hardware id, e.g. {\"2\": \"ABC1234\"}. Display numbers get reassigned when you plug things in, so a number alone can start meaning a different physical screen; a hardware id never changes.",
+  "hotkey_targets": {},
+  "block_cursor": false,
+  "restore_windows": false,
+  "restore_icons": true,
+  "leave_fullscreen": true,
+  "unfullscreen_borderless": false,
+  "intercept_hotkeys": true,
+  "fix_minimized_restore_position": true,
+  "windowed_fraction": 0.6,
+  "sweep_interval_ms": 2000,
+  "locationchange_cooldown_ms": 400,
+  "icon_save_debounce_ms": 4000,
+  "window_save_debounce_ms": 2000,
+  "ignore_process_names": [],
+  "ignore_window_classes": [],
+  "_editor_help": "Editor for the tray's 'Edit settings' and 'View log' items. Empty means notepad.exe, which every Windows install has. A name on PATH or a full path both work.",
+  "editor": "",
+  "log_level": "INFO"
+}
