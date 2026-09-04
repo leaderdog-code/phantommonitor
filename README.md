@@ -38,6 +38,12 @@ disconnecting it kills the sound you plugged the amp in for.
 PhantomMonitor fixes it in software: it watches for windows arriving on a blocked
 display and evacuates them, typically in under 10ms, so you never see it happen.
 
+It is not really a Windows fault, and not Windows-specific — Linux and macOS see
+the same phantom. HDMI carries audio inside the video stream, so **anything that
+accepts HDMI audio has to present itself as a display**. There is no audio-only
+mode to fall back on. Soundbars with an HDMI input, HDMI audio extractors and
+capture cards all do it for the same reason a receiver does.
+
 The same thing happens with anything else that sits between the graphics card
 and a panel and holds the link up on its own: a **DisplayPort-to-HDMI
 converter**, an HDMI switch or splitter, a KVM, a capture card. Those keep
