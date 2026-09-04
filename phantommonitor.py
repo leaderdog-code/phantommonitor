@@ -2120,6 +2120,95 @@ class TrayApp:
         return win32gui.DefWindowProc(hwnd, msg, wparam, lparam)
 
 
+def ddc_power_state(mon):
+    """Ask the monitor its power state over DDC/CI.
+
+    Receivers generally do not pass the I2C channel through, which is why a
+    screen switched off behind one cannot be detected. Worth reporting: if some
+    receiver does pass it, that changes what is possible.
+    """
+    try:
+        dxva2 = ctypes.windll.dxva2
+    except Exception:
+        return "unavailable"
+
+    class PHYSICAL_MONITOR(ctypes.Structure):
+        _fields_ = [("hPhysicalMonitor", wt.HANDLE),
+                    ("szPhysicalMonitorDescription", wt.WCHAR * 128)]
+
+    names = {1: "on", 2: "standby", 3: "suspend", 4: "off (soft)", 5: "off (hard)"}
+    try:
+        handle = wt.HANDLE(int(mon.handle))
+        count = wt.DWORD()
+        if not dxva2.GetNumberOfPhysicalMonitorsFromHMONITOR(handle,
+                                                             ctypes.byref(count)):
+            return "no physical monitor"
+        arr = (PHYSICAL_MONITOR * count.value)()
+        if not dxva2.GetPhysicalMonitorsFromHMONITOR(handle, count.value, arr):
+            return "cannot open"
+        try:
+            cur, mx = wt.DWORD(), wt.DWORD()
+            ok = dxva2.GetVCPFeatureAndVCPFeatureReply(
+                arr[0].hPhysicalMonitor, 0xD6, None,
+                ctypes.byref(cur), ctypes.byref(mx))
+            if not ok:
+                return "not supported (typical behind a receiver)"
+            return names.get(cur.value, str(cur.value))
+        finally:
+            dxva2.DestroyPhysicalMonitors(count.value, arr)
+    except Exception as exc:
+        return "error: %s" % exc
+
+
+def print_diagnostics(cfg):
+    """Everything worth pasting into a bug report."""
+    print("Phantom Monitor diagnostics")
+    print("=" * 72)
+    print("windows      : %s" % (sys.getwindowsversion(),))
+    print("python       : %s" % sys.version.split()[0])
+    print("dpi awareness: %s" % set_dpi_awareness())
+    print("frozen build : %s" % bool(getattr(sys, "frozen", False)))
+    print("block rules  : %s" % (cfg.get("blocked_hwids") or "(none)"))
+    print()
+
+    monitors = enum_monitors()
+    for mon in monitors:
+        blocked = any(monitor_matches_block(mon, r)
+                      for r in cfg.get("blocked_hwids", []))
+        print("Display %d  %s" % (mon.number, mon.name))
+        print("   hardware id : %s" % (mon.hwid or "?"))
+        print("   gdi device  : %s%s" % (mon.device, "  (primary)" if mon.primary else ""))
+        print("   bounds      : %s" % (mon.rect,))
+        print("   work area   : %s" % (mon.work,))
+        print("   blocked now : %s" % blocked)
+        print("   ddc/ci power: %s" % ddc_power_state(mon))
+        modes, index = set(), 0
+        while True:
+            try:
+                setting = win32api.EnumDisplaySettings(mon.device, index)
+            except Exception:
+                break
+            modes.add((setting.PelsWidth, setting.PelsHeight))
+            index += 1
+        listed = sorted(modes)
+        print("   modes       : %d offered%s" % (
+            len(listed),
+            ("  smallest %dx%d, largest %dx%d" % (listed[0] + listed[-1]))
+            if listed else ""))
+        print()
+
+    blocked = [m for m in monitors
+               if any(monitor_matches_block(m, r) for r in cfg.get("blocked_hwids", []))]
+    box = cursor_clip_rect(monitors, blocked)
+    # (box,) not box: a bare tuple is read as the format arguments.
+    print("pointer fence: %s" % (box if box else
+                                 "not possible with this layout / nothing blocked",))
+    print()
+    print("If a receiver reports a power state above rather than 'not supported',")
+    print("please open an issue - it would mean a screen switched off behind it")
+    print("can be detected, which is not currently thought possible.")
+
+
 def single_instance():
     handle = kernel32.CreateMutexW(None, False, "Global\\PhantomMonitor_SingleInstance")
     return handle and kernel32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
@@ -2130,6 +2219,10 @@ def main():
     cfg = load_config()
     setup_logging(cfg.get("log_level", "INFO"))
     awareness = set_dpi_awareness()
+
+    if "--diag" in args:
+        print_diagnostics(cfg)
+        return 0
 
     if "--list" in args:
         for mon in enum_monitors():

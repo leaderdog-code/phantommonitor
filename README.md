@@ -252,10 +252,16 @@ prompt. The log says `move rejected ... elevated window?` when this is the cause
 ## Command line
 
 ```
-python phantommonitor.py            # tray app
-python phantommonitor.py --list     # show displays and hardware ids
-python phantommonitor.py --rescue   # one-shot sweep, then exit
+PhantomMonitor.exe            # tray app
+PhantomMonitor.exe --list     # show displays and hardware ids
+PhantomMonitor.exe --diag     # full diagnostics, for bug reports
+PhantomMonitor.exe --rescue   # one-shot sweep, then exit
 ```
+
+`--diag` prints your Windows version, every display with its hardware id,
+bounds, offered resolutions and whether it answers DDC/CI, plus which rules
+currently match. **Please paste it into any issue you open** — nearly every
+question about behaviour comes down to what a particular receiver reports.
 
 Logs rotate in `logs/phantommonitor.log`.
 
