@@ -188,8 +188,20 @@ exists because some apps — Remote Desktop especially — install their own
 keyboard hook and swallow key combos before Windows dispatches them.
 
 **Pin hotkeys to a display** with `hotkey_targets`, e.g. `{"2": "GSM7814"}`.
-Display numbers get reassigned when you plug things in, so a number alone can
-quietly start meaning a different physical screen. A hardware id never changes.
+This is worth doing, because the numbers move.
+
+### Why displays are not numbered here
+
+Windows Display Settings prints a number on each display, and **there is no
+documented way to obtain it**. It is not the `\.\DISPLAYn` digit, and it is
+not the display-config path order — both have matched Settings on one layout and
+disagreed on the next, on the same machine, minutes apart. Plugging in a
+different adapter is enough to reshuffle them.
+
+So displays are identified by name, size, hardware id and position, all of which
+agree with what is physically in front of you. The number beside a hotkey is a
+**slot in this app**, nothing more, and pinning it to a hardware id is what makes
+it mean a fixed screen.
 
 ## Full-screen apps
 

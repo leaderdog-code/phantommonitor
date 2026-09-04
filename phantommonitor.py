@@ -391,12 +391,22 @@ class Monitor:
         self.name = friendly_name(self.hwid) or self.hwid or device
 
     def label(self):
-        """Number, name and hardware id together - any one alone can mislead."""
+        """Identify a display by things that cannot mislead.
+
+        Deliberately no leading number. Windows Display Settings prints its own
+        numbers, and there is no documented way to obtain them - they are not
+        the \\.\DISPLAYn digit, nor the display-config path order, and both of
+        those have matched Settings on one layout and disagreed on the next.
+        Showing a number that claims to be Windows' and is not is worse than
+        showing none, because it invites acting on it. The name, size, hardware
+        id and position always agree with what is in front of you.
+        """
         width = self.rect[2] - self.rect[0]
         height = self.rect[3] - self.rect[1]
-        star = " *" if self.primary else ""
-        return "%d: %s  (%dx%d) [%s]%s" % (self.number, self.name, width, height,
-                                           self.hwid or "?", star)
+        star = "  *primary" if self.primary else ""
+        return "%s  %dx%d [%s] at %d,%d%s" % (
+            self.name, width, height, self.hwid or "?",
+            self.rect[0], self.rect[1], star)
 
     def __repr__(self):
         return "<Monitor %s %s %s>" % (self.device, self.hwid, self.rect)
@@ -2234,7 +2244,7 @@ def print_diagnostics(cfg):
     for mon in monitors:
         blocked = any(monitor_matches_block(mon, r)
                       for r in cfg.get("blocked_hwids", []))
-        print("Display %d  %s" % (mon.number, mon.name))
+        print("%s   (hotkey slot %d)" % (mon.name, mon.number))
         print("   hardware id : %s" % (mon.hwid or "?"))
         print("   gdi device  : %s%s" % (mon.device, "  (primary)" if mon.primary else ""))
         print("   bounds      : %s" % (mon.rect,))
@@ -2288,7 +2298,7 @@ def main():
             rules = cfg.get("blocked_hwids", [])
             blocked = (" [BLOCKED]"
                        if any(monitor_matches_block(mon, r) for r in rules) else "")
-            print("%-40s hwid=%-10s %s%s" % (mon.label(), mon.hwid, mon.device, blocked))
+            print("  hotkey %d   %s%s" % (mon.number, mon.label(), blocked))
         return 0
 
     guard = Guard(cfg)
