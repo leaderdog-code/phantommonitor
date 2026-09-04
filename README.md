@@ -251,9 +251,19 @@ They just do it late. Run `--diag` ten seconds after killing the TV and you will
 see no change at all and conclude, wrongly, that detection is impossible. Give
 it five minutes.
 
-The lag costs nothing in practice. The guard re-evaluates on every display
-change, so blocking engages the instant the EDID actually flips. It only matters
-if you expected the block to arrive the moment the screen went dark.
+The timer runs in one direction only. Switching a screen **on** is picked up
+immediately - hot-plug detect fires and the amp reads the real EDID at once, so
+blocking releases straight away and the display is yours. It is only the
+**off** direction that waits, because nothing fires at all; the amp simply ages
+out its cache.
+
+That asymmetry leaves one real gap: **for those few minutes after you switch the
+screen off, the phantom is unguarded.** The amp is still reporting the screen's
+id, so a rule written against the amp's own id does not match yet, and Windows
+can drop a window onto a display that has gone dark. It fixes itself the moment
+the EDID flips. If that gap bothers you, tick the display in Settings instead
+and untick it when you actually want to use the screen - a tick takes effect
+now, and gives up the automatic release in exchange.
 
 When the EDID does flip, Windows treats it as a topology change: every monitor
 blanks for a second and relays. That flash is the amp letting go, and it is your
