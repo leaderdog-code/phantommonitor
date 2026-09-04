@@ -526,6 +526,43 @@ check("overrule beats declaration when both name an id",
       mg.looks_like_av_device("XYZ9999", "Mystery",
                               ("XYZ9999",), ("XYZ9999",)) is None)
 
+# --- does it actually start? ------------------------------------------------
+#
+# Everything above tests logic the tray app never has to be built to exercise.
+# An AttributeError in startup once let all of them pass while the program could
+# not run at all: under pythonw there is no console, so it died silently with
+# nothing in the log. Start it for real and require it to reach the end of its
+# startup sequence.
+import subprocess
+MARKER = "tracking"          # the last line startup logs
+log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "logs", "phantommonitor.log")
+before = os.path.getsize(log_path) if os.path.exists(log_path) else 0
+proc = subprocess.Popen([sys.executable, "phantommonitor.py"],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                        cwd=os.path.dirname(os.path.abspath(__file__)))
+started, crash = False, ""
+for _ in range(60):          # up to 15 seconds
+    time.sleep(0.25)
+    if proc.poll() is not None:
+        crash = (proc.stderr.read() or b"").decode("utf-8", "replace")[-600:]
+        break
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+            fh.seek(before)
+            if MARKER in fh.read():
+                started = True
+                break
+    except OSError:
+        pass
+try:
+    proc.terminate()
+    proc.wait(timeout=5)
+except Exception:
+    proc.kill()
+check("the app starts and completes its startup sequence", started,
+      "" if started else (crash.strip().replace(chr(10), " | ")[-300:] or "timed out"))
+
 root.destroy()
 print()
 failed = [r for r in results if r[0] == FAIL]

@@ -1614,6 +1614,7 @@ class TrayApp:
         self.key_hook = None
         self.key_proc = None
         self.cursor_clipped = False
+        self.cursor_locked_app = False   # a listed app is holding the pointer
         self.clip_warned = False
         self.icons_warned = False
         self.icons_quiet_until = 0.0  # do not snapshot while a change is settling
@@ -1867,7 +1868,11 @@ class TrayApp:
         if not snapshot:
             return 0
         self.window_snapshot = snapshot
-        log.debug("window snapshot [%s]: %d windows", reason, len(snapshot))
+        # Startup and an explicit save are worth stating: they are the two
+        # moments someone checks whether this is actually tracking anything.
+        # The rest happen constantly as windows move and would drown the log.
+        log.log(logging.INFO if reason in ("startup", "manual") else logging.DEBUG,
+                "tracking %d window position(s) [%s]", len(snapshot), reason)
         return len(snapshot)
 
     def _restore_windows(self, reason="display change"):
