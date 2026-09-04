@@ -15,3 +15,8 @@ icons_backup*.json
 # Machine-specific settings (hardware ids, editor path). config.example.json is
 # the template; PhantomMonitor writes config.json itself on first run.
 config.json
+
+# Build output - the exe belongs in a GitHub Release, not in the repo
+build/dist/
+build/work/
+build/*.spec

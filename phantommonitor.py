@@ -31,7 +31,14 @@ import win32process
 import desktop_icons
 
 APP_NAME = "PhantomMonitor"
-APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Frozen by PyInstaller, __file__ points inside a temporary extraction folder
+# that is deleted on exit - settings and logs written there would vanish. Use
+# the folder the executable actually lives in.
+if getattr(sys, "frozen", False):
+    APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
+else:
+    APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(APP_DIR, "config.json")
 LOG_DIR = os.path.join(APP_DIR, "logs")
 LOG_PATH = os.path.join(LOG_DIR, "phantommonitor.log")
@@ -1963,14 +1970,18 @@ class TrayApp:
             except OSError as exc:
                 log.error("could not remove autostart: %s", exc)
             return
-        pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
-        if not os.path.exists(pythonw):
-            pythonw = sys.executable
-        script = os.path.join(APP_DIR, "phantommonitor.py")
-        body = (
-            'Set sh = CreateObject("WScript.Shell")\r\n'
-            'sh.Run """%s"" ""%s""", 0, False\r\n' % (pythonw, script)
-        )
+        if getattr(sys, "frozen", False):
+            # A packaged build launches itself; there is no interpreter or
+            # script path involved.
+            body = ('Set sh = CreateObject("WScript.Shell")\r\n'
+                    'sh.Run """%s""", 0, False\r\n' % os.path.abspath(sys.executable))
+        else:
+            pythonw = os.path.join(os.path.dirname(sys.executable), "pythonw.exe")
+            if not os.path.exists(pythonw):
+                pythonw = sys.executable
+            script = os.path.join(APP_DIR, "phantommonitor.py")
+            body = ('Set sh = CreateObject("WScript.Shell")\r\n'
+                    'sh.Run """%s"" ""%s""", 0, False\r\n' % (pythonw, script))
         try:
             with open(STARTUP_VBS, "w", encoding="utf-8") as handle:
                 handle.write(body)

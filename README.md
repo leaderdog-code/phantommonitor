@@ -64,6 +64,28 @@ display.
 Displays are matched by **EDID hardware id**, not by index, so your rules survive
 reboots, cable swaps and port changes.
 
+## Install
+
+**Most people want the installer.** Download `PhantomMonitor-Setup.exe` from
+[Releases](../../releases) and run it. It installs per-user, so there is no
+administrator prompt, and offers a **"Start Phantom Monitor when I sign in"**
+tick box during setup. It appears in Add/Remove Programs like any other app.
+
+**Or take the portable executable.** `PhantomMonitor.exe` from the same place
+needs no installation at all — put it anywhere and double-click. Settings and
+logs are written beside it. Use the tray menu's **Start with Windows** if you
+want it at sign-in.
+
+Neither needs Python. Both have it bundled inside.
+
+> **Windows will warn you the first time.** SmartScreen shows "Windows protected
+> your PC" for any program from a publisher it has not seen before, which is
+> every small free tool without a paid code-signing certificate. Click **More
+> info → Run anyway**. The source is right here if you would rather read it or
+> build it yourself, and each release links a VirusTotal scan.
+
+## Running from source
+
 ## Requirements
 
 - Windows 10 or 11
@@ -78,6 +100,7 @@ reboots, cable swaps and port changes.
 ## Getting started
 
 ```
+pip install -r requirements.txt
 python phantommonitor.py --list
 ```
 
@@ -261,3 +284,13 @@ real displays.
 ## Licence
 
 MIT. See `LICENSE`.
+
+## Building it yourself
+
+```powershell
+powershell -ExecutionPolicy Bypass -File builduild.ps1
+```
+
+Produces `build/dist/PhantomMonitor.exe` with Python bundled in — roughly 27 MB,
+no dependencies. To build the installer as well, install
+[Inno Setup](https://jrsoftware.org/isdl.php) and run `iscc build\installer.iss`.
