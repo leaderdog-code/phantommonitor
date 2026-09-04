@@ -142,15 +142,41 @@ def apply_zoom(root, factor, base):
         # pixel-sized font silently becomes a much larger point-sized one.
         scaled = int(round(abs(size) * factor)) or 1
         f.configure(size=-scaled if size < 0 else scaled)
-    # The window is fixed-size, so it will not refit on its own.
-    root.geometry("")
+    # The body <Configure> handler refits the window around the new size.
 
 
-def zoom_factor(cfg):
+def windows_scale(root):
+    """Whatever Windows own display scaling is set to, as a multiplier."""
     try:
-        return max(1.0, min(3.0, float(cfg.get("settings_zoom") or 1.0)))
-    except (TypeError, ValueError):
-        return 1.0
+        import ctypes
+        hwnd = int(root.winfo_id())
+        # GetDpiForWindow is Windows 10 1607+. Older builds fall through to the
+        # 96 dpi baseline, which is the right answer for them anyway.
+        dpi = ctypes.windll.user32.GetDpiForWindow(hwnd)
+        if dpi:
+            return max(1.0, min(3.0, dpi / 96.0))
+    except Exception:
+        pass
+    return 1.0
+
+
+def zoom_factor(cfg, root=None):
+    """The zoom to open at: the user choice, else Windows own scaling.
+
+    Declaring per-monitor-v2 awareness is a promise to scale by the DPI Windows
+    reports. Ignoring it meant anyone running a 4K panel at 150% got a window
+    half the size everything else on their desktop is, and had to find the zoom
+    control to fix what should never have been wrong.
+
+    A saved choice always wins - somebody who picked a size meant it.
+    """
+    saved = cfg.get("settings_zoom")
+    if saved:
+        try:
+            return max(1.0, min(3.0, float(saved)))
+        except (TypeError, ValueError):
+            pass
+    return windows_scale(root) if root is not None else 1.0
 
 
 def run(config_path, monitors, absent=()):
@@ -165,8 +191,47 @@ def run(config_path, monitors, absent=()):
     root = tk.Tk()
     root.title("Phantom Monitor settings")
     zoom_base = font_baseline(root)
-    apply_zoom(root, zoom_factor(cfg), zoom_base)
-    root.resizable(False, False)
+
+    # Everything lives inside a scrolling body. At 3x the content is taller
+    # than a 4K panel, and a fixed-size window would simply put the Save
+    # button somewhere unreachable.
+    root.rowconfigure(0, weight=1)
+    root.columnconfigure(0, weight=1)
+    outer = ttk.Frame(root)
+    outer.grid(row=0, column=0, sticky="nsew")
+    outer.rowconfigure(0, weight=1)
+    outer.columnconfigure(0, weight=1)
+    canvas = tk.Canvas(outer, highlightthickness=0, borderwidth=0)
+    canvas.grid(row=0, column=0, sticky="nsew")
+    vbar = ttk.Scrollbar(outer, orient="vertical", command=canvas.yview)
+    canvas.configure(yscrollcommand=vbar.set)
+    body = ttk.Frame(canvas)
+    canvas.create_window((0, 0), window=body, anchor="nw")
+
+    def refit(_event=None):
+        """Size the window to its content, up to what the screen allows."""
+        root.update_idletasks()
+        want_w, want_h = body.winfo_reqwidth(), body.winfo_reqheight()
+        # Leave room for the taskbar and the title bar rather than filling
+        # the panel edge to edge.
+        room = int(root.winfo_screenheight() * 0.85)
+        scrolls = want_h > room
+        if scrolls:
+            vbar.grid(row=0, column=1, sticky="ns")
+        else:
+            vbar.grid_remove()
+        canvas.configure(width=want_w, height=min(want_h, room),
+                         scrollregion=(0, 0, want_w, want_h))
+        root.geometry("")
+
+    def on_wheel(event):
+        if vbar.winfo_ismapped():
+            canvas.yview_scroll(-1 if event.delta > 0 else 1, "units")
+
+    body.bind("<Configure>", refit)
+    root.bind_all("<MouseWheel>", on_wheel)
+    apply_zoom(root, zoom_factor(cfg, root), zoom_base)
+    root.resizable(False, True)
     try:
         root.iconbitmap(os.path.join(os.path.dirname(config_path), "app.ico"))
     except Exception:
@@ -179,10 +244,10 @@ def run(config_path, monitors, absent=()):
     # First thing in the window, because the reason to want it is that the
     # window is too small to read - so it must not be somewhere you have to
     # squint your way down to.
-    zoom_box = ttk.Frame(root)
+    zoom_box = ttk.Frame(body)
     zoom_box.grid(row=0, column=0, sticky="w", padx=10, pady=(8, 0))
     ttk.Label(zoom_box, text="Window zoom").grid(row=0, column=0, padx=(0, 6))
-    current_zoom = zoom_factor(cfg)
+    current_zoom = zoom_factor(cfg, root)
     zoom_var = tk.StringVar(
         value=next((c for c in ZOOM_CHOICES
                     if abs(float(c[:-1]) - current_zoom) < 0.01), "1x"))
@@ -196,7 +261,7 @@ def run(config_path, monitors, absent=()):
               foreground="#555").grid(row=0, column=2, padx=(8, 0))
 
     # --- displays -----------------------------------------------------------
-    box = ttk.LabelFrame(root, text="Displays")
+    box = ttk.LabelFrame(body, text="Displays")
     box.grid(row=1, column=0, sticky="ew", **pad)
 
     ttk.Label(box, text="Block windows\nand pointer", justify="center").grid(
@@ -271,7 +336,7 @@ def run(config_path, monitors, absent=()):
     # --- displays seen before but not attached now --------------------------
     absent_vars = {}
     if absent:
-        seen = ttk.LabelFrame(root, text="Seen before, not connected now")
+        seen = ttk.LabelFrame(body, text="Seen before, not connected now")
         seen.grid(row=2, column=0, sticky="ew", **pad)
         for row, (hwid, name) in enumerate(absent):
             hint = looks_like_av_device(hwid, name, declared)
@@ -290,7 +355,7 @@ def run(config_path, monitors, absent=()):
                                           sticky="w", padx=10, pady=(2, 8))
 
     # --- behaviour ----------------------------------------------------------
-    opts = ttk.LabelFrame(root, text="Behaviour")
+    opts = ttk.LabelFrame(body, text="Behaviour")
     opts.grid(row=3, column=0, sticky="ew", **pad)
 
     toggles = [
@@ -316,7 +381,7 @@ def run(config_path, monitors, absent=()):
     # non-Latin layouts and IMEs. A text field with an example is duller and
     # works. It is also validated on Save rather than as you type, so a stray
     # keystroke cannot quietly bind something.
-    keys = ttk.LabelFrame(root, text="Hotkeys")
+    keys = ttk.LabelFrame(body, text="Hotkeys")
     keys.grid(row=4, column=0, sticky="ew", **pad)
     warning = tk.StringVar(value="")
 
@@ -404,7 +469,7 @@ def run(config_path, monitors, absent=()):
         save(config_path, cfg)
         root.destroy()
 
-    buttons = ttk.Frame(root)
+    buttons = ttk.Frame(body)
     buttons.grid(row=5, column=0, sticky="ew", padx=10, pady=(4, 12))
     buttons.columnconfigure(0, weight=1)
     ttk.Button(buttons, text="Cancel", command=root.destroy).grid(
