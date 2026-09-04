@@ -1136,21 +1136,33 @@ class Guard:
             return (n[0] + ox, n[1] + oy, n[2] + ox, n[3] + oy)
         return win32gui.GetWindowRect(hwnd)
 
-    def check_window(self, hwnd, reason):
+    def check_window(self, hwnd, reason, include_offscreen=False):
         if not self.cfg.get("enabled", True):
             return False
         blocked = self.blocked()
-        if not blocked or not is_manageable(hwnd, self.cfg):
+        if not is_manageable(hwnd, self.cfg):
+            return False
+        if not blocked and not include_offscreen:
             return False
         try:
             rect = self.window_rect_for_check(hwnd)
         except Exception:
             return False
 
-        # require_overlap: a window that touches no monitor at all is parked
-        # off-screen on purpose - leave it alone rather than dragging it into view.
+        # require_overlap: a window touching no monitor at all is normally
+        # parked off-screen on purpose - apps hide helper windows out there and
+        # dragging them into view breaks things.
         here = monitor_of_rect(rect, self.monitors, require_overlap=True)
-        if here is None or here.device not in set(m.device for m in blocked):
+
+        if here is None:
+            # Nowhere at all. Automatic sweeps leave it; an explicit rescue is
+            # the user asking for exactly this - a window a display change threw
+            # into dead space, which is otherwise unreachable by any means.
+            if not include_offscreen:
+                return False
+            log.info("recovering %r from off-screen %s",
+                     title_of(hwnd)[:60], rect)
+        elif here.device not in set(m.device for m in blocked):
             return False
 
         target = self.rescue_target()
@@ -1158,15 +1170,19 @@ class Guard:
             return False
         return self.move_window(hwnd, target, reason)
 
-    def sweep(self, reason="sweep"):
-        if not self.cfg.get("enabled", True) or not self.blocked():
+    def sweep(self, reason="sweep", include_offscreen=False):
+        """Evacuate blocked displays. With include_offscreen, also recover
+        windows sitting on no display at all - what an explicit rescue means."""
+        if not self.cfg.get("enabled", True):
+            return 0
+        if not self.blocked() and not include_offscreen:
             return 0
         moved = 0
         hwnds = []
         win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
         for hwnd in hwnds:
             try:
-                if self.check_window(hwnd, reason):
+                if self.check_window(hwnd, reason, include_offscreen):
                     moved += 1
             except Exception as exc:
                 log.debug("sweep skipped %s: %s", hwnd, exc)
@@ -1819,7 +1835,7 @@ class TrayApp:
 
     def _run_action(self, action):
         if action == 0:
-            self.guard.sweep("hotkey")
+            self.guard.sweep("hotkey", include_offscreen=True)
         elif 1 <= action <= 9:
             self.guard.move_active_to(
                 action, pick_menu_target(self.last_focused, self.cfg), "hotkey")
@@ -1860,7 +1876,8 @@ class TrayApp:
         # currently applying.
         blocked_now = set(m.device for m in self.guard.blocked())
 
-        add("Rescue windows now", lambda: self.guard.sweep("manual"))
+        add("Rescue windows now",
+            lambda: self.guard.sweep("manual", include_offscreen=True))
         add("Save window + icon layout now", self._snapshot_all)
         add("Restore window + icon layout", self._restore_all)
         add("Auto-restore window positions", self._toggle_restore_windows,
@@ -2276,7 +2293,7 @@ def main():
 
     guard = Guard(cfg)
     if "--rescue" in args:
-        print("rescued %d window(s)" % guard.sweep("cli"))
+        print("rescued %d window(s)" % guard.sweep("cli", include_offscreen=True))
         return 0
 
     if not single_instance():

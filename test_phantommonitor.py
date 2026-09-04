@@ -17,6 +17,9 @@ cfg = mg.load_config()
 # Force an unqualified rule: these tests must behave the same whether or not a
 # real screen happens to be plugged into the amp right now.
 cfg["blocked_hwids"] = ["DON0015"]
+# Hotkey pins deliberately override number lookups, so number-based tests must
+# opt out or they assert against whichever screen the pin resolves to.
+cfg["hotkey_targets"] = {}
 guard = mg.Guard(cfg)
 
 
@@ -123,9 +126,17 @@ win32gui.SetWindowPos(hwnd, 0, -32000, -32000, 400, 300,
                       win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
 root.update()
 parked = win32gui.GetWindowRect(hwnd)
-check("off-screen window not claimed",
+check("off-screen window not claimed by an automatic sweep",
       mg.monitor_of_rect(parked, guard.monitors, require_overlap=True) is None
       and not guard.check_window(hwnd, "test"), str(parked))
+# But an explicit rescue is the user asking for exactly this: a window a
+# display change threw into dead space, unreachable by any other means.
+check("explicit rescue recovers an off-screen window",
+      guard.check_window(hwnd, "test", include_offscreen=True))
+check("and it lands somewhere real",
+      mg.monitor_of_rect(win32gui.GetWindowRect(hwnd), guard.monitors,
+                         require_overlap=True) is not None,
+      str(win32gui.GetWindowRect(hwnd)))
 
 # 10 - a borderless full-screen window (the 800x600 RDP slab) must be refitted
 #      to the destination, not carried across at the blocked monitor's size.
@@ -182,10 +193,13 @@ mon1 = next(m for m in guard.monitors if m.number == 1)
 win32gui.SetWindowPos(hwnd, 0, mon1.work[0] + 200, mon1.work[1] + 200, 500, 350,
                       win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
 root.update()
-ok = guard.move_active_to(2, hwnd, "test")
+elsewhere = next(m for m in guard.monitors
+                 if m.hwid != "DON0015" and not m.primary)
+ok = guard.move_active_to(elsewhere.number, hwnd, "test")
 root.update()
-check("tray menu moves the captured window", ok and where(hwnd).number == 2,
-      where(hwnd).name)
+check("tray menu moves the captured window",
+      ok and where(hwnd).number == elsewhere.number,
+      "%s -> %s" % (elsewhere.name, where(hwnd).name))
 check("stale/invalid hwnd rejected", not guard.move_active_to(2, 0, "test"))
 
 # 12 - clicking the tray icon hands the foreground to the taskbar, so the menu
@@ -258,8 +272,9 @@ check("original size restored on the way out",
 #      with the guard that would yank it straight back.
 cfg["blocked_hwids"] = ["DON0015"]
 check("refuses to move onto a blocked monitor",
-      not guard.move_active_to(3, hwnd, "test"))
-check("still moves to allowed monitors", guard.move_active_to(2, hwnd, "test"))
+      not guard.move_active_to(denon.number, hwnd, "test"))
+check("still moves to allowed monitors",
+      guard.move_active_to(elsewhere.number, hwnd, "test"))
 
 # 16 - block rules may be qualified by resolution, so the guard stands aside by
 #      itself once a real display appears behind the amp.
@@ -294,19 +309,29 @@ for w, h, should_block, what in [
 
 # 17 - the pointer fence: one rectangle covering every allowed display and no
 #      blocked one, or None when the layout cannot be expressed that way.
-mon2 = next(m for m in guard.monitors if m.number == 2)
 box = mg.cursor_clip_rect(guard.monitors, [denon])
+allowed = [m for m in guard.monitors if m.hwid != "DON0015"]
 check("fence excludes the Denon",
       box is not None and mg.overlap_area(box, denon) == 0, str(box))
-check("fence still covers monitors 1 and 2",
+check("fence covers every allowed display",
       all(box[0] <= m.rect[0] and box[1] <= m.rect[1]
-          and box[2] >= m.rect[2] and box[3] >= m.rect[3] for m in (mon1, mon2)))
+          and box[2] >= m.rect[2] and box[3] >= m.rect[3] for m in allowed))
 check("no fence when nothing is blocked",
       mg.cursor_clip_rect(guard.monitors, []) is None)
-# Blocking the middle display cannot be fenced with one rectangle - it must
-# refuse rather than lock the pointer out of a display in daily use.
+# A blocked display sandwiched between two active ones cannot be fenced with a
+# single rectangle. Built rather than borrowed from the live layout, which may
+# or may not happen to contain such an arrangement.
+class Fake:
+    def __init__(self, device, rect):
+        self.device, self.rect, self.hwid, self.primary = device, rect, device, False
+
+left = Fake("L", (0, 0, 1000, 1000))
+middle = Fake("M", (1000, 0, 2000, 1000))
+right = Fake("R", (2000, 0, 3000, 1000))
 check("refuses when one rectangle will not do",
-      mg.cursor_clip_rect(guard.monitors, [mon2]) is None)
+      mg.cursor_clip_rect([left, middle, right], [middle]) is None)
+check("but manages it when the blocked display is on the end",
+      mg.cursor_clip_rect([left, middle, right], [right]) == (0, 0, 2000, 1000))
 
 # 18 - icon layouts are held in screen coordinates, so a display arrangement
 #      never seen before can inherit from the last known one rather than
