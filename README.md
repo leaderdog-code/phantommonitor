@@ -211,11 +211,13 @@ phantom and stops matching when a real screen appears, so blocking turns itself
 on and off with no clicking. A Denon tested here behaves that way, falling back
 to 800×600 a few minutes after a screen goes dark.
 
-A receiver that reports the same EDID regardless gives you no signal at all. A
-Yamaha tested here does this — the resolution does not shrink when the screen is
-off, so nothing can tell the difference. **Use a plain hardware id and tick it
-when you want that display**, exactly as you would for a monitor you are
-reserving.
+A setup that reports the same EDID regardless gives you no signal at all. A
+Yamaha tested here behaved that way — though it was reached through a
+DisplayPort-to-HDMI adapter, and an active adapter terminates the link and
+regenerates it, so the constant EDID may be the adapter's doing rather than the
+amp's. Either way the result is the same from the desktop: nothing changes when
+the screen goes off. **Use a plain hardware id and tick it when you want that
+display**, exactly as you would for a monitor you are reserving.
 
 Run `PhantomMonitor.exe --diag` with a screen awake behind the amp and again
 with it off. If the reported resolution changes, the qualified rule will work.
@@ -456,12 +458,15 @@ every monitor and reshuffles your windows and desktop icons.
   drops a cached EDID a few minutes after the screen goes dark and blocking
   resumes then; an adapter or a TV's own quick-start standby may hold it
   indefinitely, and then blocking is a tick in the settings.
-- **Receivers differ, and not by a little.** A Denon tested here drops to a
-  800×600 fallback EDID a few minutes after the screen behind it goes dark,
-  which makes automatic blocking possible. A Yamaha tested here reports the
-  same EDID whether or not anything is awake, so there is no signal to detect
-  and blocking is a manual tick. Assume nothing about your own amp until
-  `--diag` tells you which kind it is.
+- **Setups differ, and not by a little.** A Denon tested here, on a native HDMI
+  port, drops to a 800×600 fallback EDID a few minutes after the screen behind
+  it goes dark — which is what makes automatic blocking possible. A Yamaha
+  tested here, reached through a DisplayPort-to-HDMI adapter, reported the same
+  EDID whether or not anything was awake. Whether that was the amp or the
+  adapter is not separable without trying it on a native HDMI port, and it does
+  not matter to the outcome: no change means no signal means a manual tick.
+  Assume nothing about your own hardware until `--diag` tells you which kind
+  you have.
 - The timings quoted here — the four-minute hold in particular — come from one
   machine. `--diag` output from other hardware is the most useful thing anyone
   could send.
