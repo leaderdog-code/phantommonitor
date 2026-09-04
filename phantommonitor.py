@@ -121,6 +121,7 @@ DEFAULT_CONFIG = {
     # this basis. Worth reporting so the built-in list catches up.
     "av_devices": [],
     "not_av_devices": [],
+    "settings_zoom": 1.0,
     "app_displays": {},
     "app_positions": {},
     "support_url": "",

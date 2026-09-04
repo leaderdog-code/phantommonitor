@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import tkinter as tk
+from tkinter import font as tkfont
 from tkinter import ttk
 
 
@@ -92,6 +93,49 @@ def unsafe_hotkey(spec):
     return None
 
 
+ZOOM_CHOICES = ("1x", "1.25x", "1.5x", "2x", "2.5x", "3x")
+
+
+def apply_zoom(root, factor):
+    """Scale the whole UI by FACTOR.
+
+    The app asks Windows for per-monitor-v2 DPI awareness, which means Windows
+    stops scaling it and hands over real pixels. That is right for measuring
+    monitors and moving windows, and wrong for reading text: on a 4K panel run
+    at 100%, every control comes out physically half the size it would be on a
+    1080p screen. Windows own scaling cannot be borrowed back per-window, so
+    the window scales itself.
+
+    Tk sizes most widgets to their text, so scaling the named fonts carries
+    nearly all of the layout with it.
+    """
+    if abs(factor - 1.0) < 0.01:
+        return
+    try:
+        root.tk.call("tk", "scaling", root.tk.call("tk", "scaling") * factor)
+    except tk.TclError:
+        pass
+    for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont",
+                 "TkCaptionFont", "TkSmallCaptionFont", "TkIconFont",
+                 "TkTooltipFont", "TkFixedFont"):
+        try:
+            f = tkfont.nametofont(name, root=root)
+        except tk.TclError:
+            continue
+        size = f.cget("size")
+        # Negative sizes are pixels, positive are points. Keep the sign, or a
+        # pixel-sized font silently becomes a much larger point-sized one.
+        scaled = int(round(abs(size) * factor)) or 1
+        f.configure(size=-scaled if size < 0 else scaled)
+
+
+def zoom_factor(cfg):
+    try:
+        return max(1.0, min(3.0, float(cfg.get("settings_zoom") or 1.0)))
+    except (TypeError, ValueError):
+        return 1.0
+
+
 def run(config_path, monitors, absent=()):
     """monitors: list of (name, hwid, width, height, x, y, primary).
 
@@ -103,6 +147,7 @@ def run(config_path, monitors, absent=()):
     cfg = load(config_path)
     root = tk.Tk()
     root.title("Phantom Monitor settings")
+    apply_zoom(root, zoom_factor(cfg))
     root.resizable(False, False)
     try:
         root.iconbitmap(os.path.join(os.path.dirname(config_path), "app.ico"))
@@ -316,14 +361,33 @@ def run(config_path, monitors, absent=()):
             | ((shown - ticked) & (auto_av | set(denied))))
         for key, var in toggle_vars.items():
             cfg[key] = bool(var.get())
+        cfg["settings_zoom"] = float(zoom_var.get()[:-1])
         cfg["hotkeys"] = new_hotkeys
         save(config_path, cfg)
         root.destroy()
 
     buttons = ttk.Frame(root)
-    buttons.grid(row=4, column=0, sticky="e", padx=10, pady=(4, 12))
-    ttk.Button(buttons, text="Cancel", command=root.destroy).grid(row=0, column=0, padx=4)
-    ttk.Button(buttons, text="Save", command=apply_and_close).grid(row=0, column=1)
+    buttons.grid(row=4, column=0, sticky="ew", padx=10, pady=(4, 12))
+    buttons.columnconfigure(0, weight=1)
+
+    # Zoom lives here rather than in a menu because the reason to reach
+    # for it is that the window is too small to read comfortably, and
+    # this is the one row everybody looks at.
+    zoom_box = ttk.Frame(buttons)
+    zoom_box.grid(row=0, column=0, sticky="w")
+    ttk.Label(zoom_box, text="Window zoom").grid(row=0, column=0, padx=(0, 6))
+    current_zoom = zoom_factor(cfg)
+    zoom_var = tk.StringVar(
+        value=next((c for c in ZOOM_CHOICES
+                    if abs(float(c[:-1]) - current_zoom) < 0.01), "1x"))
+    ttk.Combobox(zoom_box, textvariable=zoom_var, width=6, state="readonly",
+                 values=list(ZOOM_CHOICES)).grid(row=0, column=1)
+    ttk.Label(zoom_box, text="(applies next time this window opens)",
+              foreground="#555").grid(row=0, column=2, padx=(8, 0))
+    ttk.Button(buttons, text="Cancel", command=root.destroy).grid(
+        row=0, column=1, padx=4)
+    ttk.Button(buttons, text="Save", command=apply_and_close).grid(
+        row=0, column=2)
 
     root.bind("<Escape>", lambda _e: root.destroy())
     root.update_idletasks()
