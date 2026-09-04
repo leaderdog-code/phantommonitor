@@ -253,6 +253,24 @@ The delay has not been timed precisely enough to publish a figure — the poller
 timestamps the drop, but not the moment the remote was pressed. Treat it as
 "minutes, not seconds", and measure your own before relying on it.
 
+### Why this happens at all
+
+An AV receiver is an HDMI **repeater**. It reads the EDID of whatever is
+downstream of it, merges in its own audio capabilities, and presents that
+combined EDID upstream to the PC — which is why Windows shows you the *TV's*
+hardware id, not the amp's, whenever a TV is awake behind it.
+
+When the downstream screen goes away, the amp swaps back to an EDID of its own,
+then **drops and re-asserts the HPD (Hot Plug Detect) line** to make the PC
+re-read it. To Windows that is indistinguishable from someone yanking the cable
+and plugging it back in, so it re-enumerates every output — which is why all
+your monitors blank and relay for a second in both directions.
+
+How long the amp waits before doing that is its own firmware's decision. It is
+not specified anywhere, and receivers differ: some keep serving an EDID in
+standby, others drop off the bus entirely and look like a cable plugged into
+nothing. That is why this README gives you a method rather than a number.
+
 Expect the amp to be given a fresh position when it lets go: the phantom
 reappeared on the opposite side of the desktop from where the TV had been.
 
@@ -289,7 +307,7 @@ each state you actually care about:
   answer
 
 Run `PhantomMonitor.exe --diag` with a screen awake behind the amp, then switch
-the screen off, **wait five minutes**, and run it again. If either the hardware
+the screen off, **wait several minutes**, and run it again. If either the hardware
 id or the resolution has changed, a rule will work. If neither has changed after
 a good long wait, nothing in software can tell, and a tick is the honest answer.
 
