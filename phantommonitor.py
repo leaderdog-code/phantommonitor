@@ -682,6 +682,28 @@ def monitor_matches_block(mon, spec):
     return (width, height) == size
 
 
+def known_displays():
+    """Every display Windows has cached an EDID for: [(hwid, name), ...].
+
+    Lets rules be set for kit that is not plugged in at the moment - which
+    matters for a pass-through amp, since while a screen is awake behind it the
+    amp's own id is nowhere to be seen, and that id is exactly what wants
+    blocking.
+    """
+    seen = {}
+    try:
+        base = "SYSTEM\CurrentControlSet\Enum\DISPLAY"
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base) as root:
+            for index in range(winreg.QueryInfoKey(root)[0]):
+                hwid = winreg.EnumKey(root, index)
+                name = friendly_name(hwid)
+                if name and hwid not in seen:
+                    seen[hwid] = name
+    except OSError as exc:
+        log.debug("could not enumerate known displays: %s", exc)
+    return sorted(seen.items())
+
+
 def enum_monitors():
     numbers = display_settings_numbers()
     mons = []
@@ -2621,9 +2643,13 @@ def main():
 
     if "--settings" in args:
         import settings_window
+        live = enum_monitors()
         monitors = [(m.name, m.hwid, m.rect[2] - m.rect[0], m.rect[3] - m.rect[1],
-                     m.rect[0], m.rect[1], m.primary) for m in enum_monitors()]
-        settings_window.run(CONFIG_PATH, monitors)
+                     m.rect[0], m.rect[1], m.primary) for m in live]
+        attached = set(m.hwid for m in live)
+        absent = [(hwid, name) for hwid, name in known_displays()
+                  if hwid not in attached]
+        settings_window.run(CONFIG_PATH, monitors, absent)
         return 0
 
     if "--list" in args:

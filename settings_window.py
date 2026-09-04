@@ -90,8 +90,14 @@ def unsafe_hotkey(spec):
     return None
 
 
-def run(config_path, monitors):
-    """monitors: list of (name, hwid, width, height, x, y, primary)."""
+def run(config_path, monitors, absent=()):
+    """monitors: list of (name, hwid, width, height, x, y, primary).
+
+    absent: [(hwid, name)] for displays Windows has seen before but that are
+    not plugged in now. A pass-through amp hides its own id whenever a screen is
+    awake behind it, and that id is exactly the one worth blocking - so it has
+    to be settable while it is nowhere to be seen.
+    """
     cfg = load(config_path)
     root = tk.Tk()
     root.title("Phantom Monitor settings")
@@ -168,9 +174,30 @@ def run(config_path, monitors):
               foreground="#555").grid(row=len(monitors) + 1, column=0, columnspan=4,
                                       sticky="w", padx=10, pady=(2, 8))
 
+    # --- displays seen before but not attached now --------------------------
+    absent_vars = {}
+    if absent:
+        seen = ttk.LabelFrame(root, text="Seen before, not connected now")
+        seen.grid(row=1, column=0, sticky="ew", **pad)
+        for row, (hwid, name) in enumerate(absent):
+            hint = looks_like_av_device(hwid, name, declared)
+            label = "%s   [%s]%s" % (name, hwid,
+                                     ("   %s" % hint) if hint else "")
+            ttk.Label(seen, text=label).grid(row=row, column=0, sticky="w",
+                                             padx=10, pady=2)
+            var = tk.BooleanVar(value=rule_for(hwid) is not None)
+            absent_vars[hwid] = var
+            ttk.Checkbutton(seen, text="Block", variable=var).grid(
+                row=row, column=1, padx=10)
+        ttk.Label(seen, text="An amp that passes a screen's EDID through shows the\n"
+                             "screen's id while it is awake and its own when it is\n"
+                             "not - so its own id is set here, in advance.",
+                  foreground="#555").grid(row=len(absent), column=0, columnspan=2,
+                                          sticky="w", padx=10, pady=(2, 8))
+
     # --- behaviour ----------------------------------------------------------
     opts = ttk.LabelFrame(root, text="Behaviour")
-    opts.grid(row=1, column=0, sticky="ew", **pad)
+    opts.grid(row=2, column=0, sticky="ew", **pad)
 
     toggles = [
         ("enabled", "Keep windows off blocked displays  (master switch)"),
@@ -196,7 +223,7 @@ def run(config_path, monitors):
     # works. It is also validated on Save rather than as you type, so a stray
     # keystroke cannot quietly bind something.
     keys = ttk.LabelFrame(root, text="Hotkeys")
-    keys.grid(row=2, column=0, sticky="ew", **pad)
+    keys.grid(row=3, column=0, sticky="ew", **pad)
     warning = tk.StringVar(value="")
 
     hotkeys = dict(cfg.get("hotkeys") or {})
@@ -244,9 +271,17 @@ def run(config_path, monitors):
             elif existing:
                 new_parked = [s for s in new_parked
                               if s.split("@")[0].strip() != hwid] + [existing]
-        # Rules for displays that are not attached right now must survive.
-        attached = set(m[1] for m in monitors)
-        new_rules += [s for s in rules if s.split("@")[0].strip() not in attached]
+        # Displays that are not attached: keep whatever the user ticked here,
+        # and leave rules for anything not shown at all untouched.
+        shown = set(m[1] for m in monitors) | set(absent_vars)
+        for hwid, var in absent_vars.items():
+            existing = rule_for(hwid)
+            if var.get():
+                new_rules.append(existing or hwid)
+            elif existing:
+                new_parked = [s for s in new_parked
+                              if s.split("@")[0].strip() != hwid] + [existing]
+        new_rules += [s for s in rules if s.split("@")[0].strip() not in shown]
 
         new_targets = {}
         for _n, hwid, _w, _h, _x, _y, _p in monitors:
@@ -265,7 +300,7 @@ def run(config_path, monitors):
         root.destroy()
 
     buttons = ttk.Frame(root)
-    buttons.grid(row=3, column=0, sticky="e", padx=10, pady=(4, 12))
+    buttons.grid(row=4, column=0, sticky="e", padx=10, pady=(4, 12))
     ttk.Button(buttons, text="Cancel", command=root.destroy).grid(row=0, column=0, padx=4)
     ttk.Button(buttons, text="Save", command=apply_and_close).grid(row=0, column=1)
 

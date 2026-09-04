@@ -216,12 +216,17 @@ phantom and stops matching when a real screen appears, so blocking turns itself
 on and off with no clicking. A Denon tested here behaves that way, falling back
 to 800×600 a few minutes after a screen goes dark.
 
-Other receivers change their **identity** instead, and for those the plain rule
-is already automatic. A **Yamaha HTR-4063** passes the downstream EDID straight
-through: with nothing attached Windows sees `YMH3148` "HTR-4063", and with a TV
-behind it Windows sees the TV — a different hardware id entirely. So a plain
-`YMH3148` rule blocks the phantom and stops matching the moment a real screen
-appears, with no qualifier and no clicking.
+Other receivers change their **identity** instead. A **Yamaha HTR-4063** passes
+the downstream EDID straight through: with nothing attached Windows sees
+`YMH3148` "HTR-4063", and with a TV behind it Windows sees the TV's own id. A
+plain `YMH3148` rule therefore blocks the amp while nothing is connected to it,
+and stops matching once a screen is plugged in.
+
+**But that distinguishes unplugged from plugged in, not on from off.** With the
+TV connected and switched off, Windows still saw the TV's id — because the TV
+held the link up in standby and the amp went on relaying its EDID. So if a
+screen lives permanently behind your amp and you only switch it on and off,
+the identity never changes and this buys you nothing.
 
 Note what that amp does *not* give you: it advertises a full 1920×1080 with
 nothing attached, so a size rule would never have caught it. Identity was the
@@ -229,15 +234,26 @@ signal all along.
 
 So there are two shapes of receiver, and both can be automatic:
 
-| Amp behaviour | What changes when a screen appears | Rule to use |
+| Amp behaviour | What changes when a screen is *connected* | Rule to use |
 |---|---|---|
 | Passes the screen's EDID through | the hardware id | plain `YMH3148` |
 | Keeps its own EDID, adjusts modes | the resolution | `DON0015@<1280x720` |
 
-`--diag` tells you which you have: look at the hardware id with a screen awake
-behind the amp, then again with it off. If the id changes, use a plain rule. If
-the id stays and only the resolution moves, qualify it. If neither changes,
-nothing in software can detect it and a tick is the honest answer.
+Neither reacts to a screen merely being switched off, if that screen holds the
+link up in standby.
+
+`--diag` tells you which you have. Look at the hardware id and resolution in
+each state you actually care about:
+
+- **Id changes** when a screen is connected → a plain rule is automatic
+- **Id stays, resolution changes** → qualify it with `@<1280x720`
+- **Neither changes** → nothing in software can tell, and a tick is the honest
+  answer
+
+Be aware that a screen switched *off* usually looks identical to one switched
+on, because most TVs and many monitors hold the link up in standby. Automatic
+behaviour is far more likely when kit is physically unplugged than when it is
+merely powered down.
 
 Run `PhantomMonitor.exe --diag` with a screen awake behind the amp and again
 with it off. If the reported resolution changes, the qualified rule will work.
