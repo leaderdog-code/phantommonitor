@@ -669,6 +669,18 @@ def is_manageable(hwnd, cfg):
         return False
 
 
+def shorten(text, limit):
+    """Trim for a menu, without leaving a dangling separator mid-title.
+
+    Window titles are full of " - " separators, so a blind cut often ends on
+    one and reads as though the label itself is unfinished.
+    """
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip(" -–—:|/\\") + "…"
+
+
 def title_of(hwnd):
     try:
         return win32gui.GetWindowText(hwnd) or "<" + win32gui.GetClassName(hwnd) + ">"
@@ -1857,7 +1869,7 @@ class TrayApp:
         # Name the window it will act on, so there is no guessing about which
         # one the menu captured.
         if self.menu_target and is_manageable(self.menu_target, self.cfg):
-            add_sub('Move "%s" to' % title_of(self.menu_target)[:34], move_menu)
+            add_sub('Move "%s" to' % shorten(title_of(self.menu_target), 34), move_menu)
         else:
             win32gui.AppendMenu(menu, win32con.MF_STRING | win32con.MF_GRAYED, 0,
                                 "Move active window to  (none focused)")
