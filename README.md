@@ -300,6 +300,15 @@ if you try it, please open an issue either way.
 - An EDID hardware id identifies a monitor *model*, not an individual panel, so
   two identical monitors share one id. PhantomMonitor warns when it sees that.
 
+## How this was built
+
+Co-authored with Claude Opus 5 (Anthropic), driven and tested by me against a
+real Denon receiver and three displays. Every behaviour described above was
+verified on actual hardware rather than assumed — including the awkward parts,
+like how long a receiver holds a cached EDID after the screen goes dark, and
+which key form Remote Desktop actually accepts to leave full screen. The rough
+edges I know about are listed under Known limits.
+
 ## Licence
 
 MIT. See `LICENSE`.
