@@ -122,6 +122,8 @@ DEFAULT_CONFIG = {
     "av_devices": [],
     "not_av_devices": [],
     "cursor_lock_apps": [],
+    "cursor_lock_fullscreen": True,
+    "cursor_never_lock": ["mstsc.exe"],
     "settings_zoom": 1.0,
     "app_displays": {},
     "app_positions": {},
@@ -580,6 +582,21 @@ def topology_signature(monitors):
                     for m in sorted(monitors, key=lambda m: m.number))
 
 
+def fenceable(blocked, app_displays):
+    """Of the blocked displays, the ones to also wall the pointer out of.
+
+    A display with an app pinned to it is reserved, not banished - the
+    point of a chat monitor is to read and answer on it. Blocking keeps
+    other windows off; walling the pointer out as well would leave a
+    screen nobody can click, which is not reserving it, it is losing it.
+
+    A phantom has nothing pinned to it and stays fenced, which is the
+    case the fence exists for.
+    """
+    pinned = set((app_displays or {}).values())
+    return [m for m in blocked if m.hwid not in pinned]
+
+
 def rect_within(inner, outer):
     """True if INNER sits entirely inside OUTER."""
     return (inner[0] >= outer[0] and inner[1] >= outer[1]
@@ -872,8 +889,20 @@ def covers_monitor(rect, mon, fraction=0.95):
     return mon_area > 0 and overlap_area(rect, mon) >= fraction * mon_area
 
 
-def cursor_lock_rect(rect, monitors, blocked, app, lock_apps):
+def cursor_lock_rect(rect, monitors, blocked, app, lock_apps,
+                     never_lock=(), lock_fullscreen=True):
     """The display to confine the pointer to for a full-screen app, or None.
+
+    Default is to hold it. A full-screen app is one the user is inside, and
+    a game that loses its cursor at the screen edge is unplayable - alt-tab
+    out once to check a map or answer a message and the edge is gone for the
+    rest of the session, because nothing puts the confinement back.
+
+    Naming games individually does not scale: a Steam or Epic library is
+    hundreds of executables. So this is opt-OUT. cursor_never_lock carries
+    the exceptions, and full-screen RDP is the one that matters - being
+    locked into a remote session would strand the pointer away from every
+    other screen.
 
     Two full-screen apps can want opposite things, so this cannot be one rule.
     A game wants the pointer held inside it and wants that back the instant you
@@ -883,14 +912,17 @@ def cursor_lock_rect(rect, monitors, blocked, app, lock_apps):
 
     So confinement is opt-in per executable. Anything not listed is left alone.
     """
-    if not app or not lock_apps or not rect or not monitors:
-        return None
-    if app.lower() not in set(a.strip().lower() for a in lock_apps if a):
+    if not rect or not monitors:
         return None
     host = monitor_of_rect(rect, monitors, require_overlap=True)
     if host is None or host in blocked or not covers_monitor(rect, host):
         return None
-    return host.rect
+    name = (app or "").strip().lower()
+    if name and name in set(a.strip().lower() for a in lock_apps or () if a):
+        return host.rect          # named explicitly, always hold it
+    if name and name in set(a.strip().lower() for a in never_lock or () if a):
+        return None               # named as never, e.g. full-screen RDP
+    return host.rect if lock_fullscreen else None
 
 
 def app_owns_cursor(rect, monitors, blocked):
@@ -2033,7 +2065,14 @@ class TrayApp:
             # "off" still leaves the pointer unable to reach a display.
             self._release_cursor_clip()
             return
-        box = cursor_clip_rect(self.guard.monitors, self.guard.blocked())
+        # Reserved screens - ones with an app pinned to them - stay
+        # reachable. Only unclaimed blocked displays get walled off.
+        fence_out = fenceable(self.guard.blocked(),
+                              self.cfg.get("app_displays"))
+        if not fence_out:
+            self._release_cursor_clip()
+            return
+        box = cursor_clip_rect(self.guard.monitors, fence_out)
         if box is None:
             self._release_cursor_clip()
             if not self.clip_warned:
@@ -2053,9 +2092,11 @@ class TrayApp:
             fg_rect, fg_app = None, ""
         # Listed apps get the pointer actively held inside them, re-applied on
         # every sweep - which is what makes it come back after an alt-tab out.
-        lock = cursor_lock_rect(fg_rect, self.guard.monitors,
-                                self.guard.blocked(), fg_app,
-                                self.cfg.get("cursor_lock_apps"))
+        lock = cursor_lock_rect(
+            fg_rect, self.guard.monitors, self.guard.blocked(), fg_app,
+            self.cfg.get("cursor_lock_apps"),
+            self.cfg.get("cursor_never_lock"),
+            self.cfg.get("cursor_lock_fullscreen", True))
         if lock is not None:
             held = wt.RECT(lock[0], lock[1], lock[2], lock[3])
             if user32.ClipCursor(ctypes.byref(held)):
