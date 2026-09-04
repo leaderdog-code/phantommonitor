@@ -1734,8 +1734,12 @@ class TrayApp:
         the clip whenever the foreground window changes, so this is re-applied
         on focus changes, display changes and the periodic sweep.
         """
-        if not self.cfg.get("block_cursor", False) or not self.guard.blocked():
+        if (not self.cfg.get("block_cursor", False)
+                or not self.cfg.get("enabled", True)
+                or not self.guard.blocked()):
             # Nothing blocked means nothing to fence - not a failure to fence.
+            # And switching the guard off has to release the fence too, or
+            # "off" still leaves the pointer unable to reach a display.
             self._release_cursor_clip()
             return
         box = cursor_clip_rect(self.guard.monitors, self.guard.blocked())
@@ -1895,10 +1899,26 @@ class TrayApp:
             checked=self.cfg.get("restore_windows", True))
         add("Auto-restore desktop icons", self._toggle_restore_icons,
             checked=self.cfg.get("restore_icons", True))
-        add("Guard enabled", self._toggle_enabled, checked=enabled)
+        add("Keep windows off blocked displays", self._toggle_enabled,
+            checked=enabled)
         add("Keep pointer off blocked displays", self._toggle_cursor_block,
-            checked=self.cfg.get("block_cursor", False))
+            checked=self.cfg.get("block_cursor", False) and enabled,
+            enabled=enabled)
         sep()
+
+        move_menu = win32gui.CreatePopupMenu()
+        specs = self.cfg.get("hotkeys") or {}
+        for mon in self.guard.monitors:
+            if mon.device in blocked_now:
+                win32gui.AppendMenu(move_menu, win32con.MF_STRING | win32con.MF_GRAYED,
+                                    0, mon.label() + "   (blocked)")
+                continue
+            item_id = next_id[0]
+            next_id[0] += 1
+            spec = specs.get("monitor_%d" % mon.number, "")
+            win32gui.AppendMenu(move_menu, win32con.MF_STRING, item_id,
+                                mon.label() + (("\t" + spec) if spec else ""))
+            self.actions[item_id] = self._make_move_action(mon.number)
 
         # Name the window it will act on, so there is no guessing about which
         # one the menu captured.
@@ -2097,7 +2117,12 @@ class TrayApp:
     def _wnd_proc(self, hwnd, msg, wparam, lparam):
         if msg == WM_TRAYICON:
             if lparam in (win32con.WM_RBUTTONUP, win32con.WM_LBUTTONUP):
-                self._show_menu()
+                try:
+                    self._show_menu()
+                except Exception:
+                    # A window procedure swallows exceptions, so a broken menu
+                    # builder shows up as clicks doing nothing at all. Say so.
+                    log.exception("could not build the tray menu")
             elif lparam == win32con.WM_LBUTTONDBLCLK:
                 self.guard.sweep("double-click")
             return 0

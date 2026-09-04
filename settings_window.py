@@ -86,7 +86,7 @@ def run(config_path, monitors):
     opts.grid(row=1, column=0, sticky="ew", **pad)
 
     toggles = [
-        ("enabled", "Guard enabled"),
+        ("enabled", "Keep windows off blocked displays  (master switch)"),
         ("block_cursor", "Keep the mouse pointer off blocked displays"),
         ("restore_windows", "Put windows back after a display change"),
         ("restore_icons", "Put desktop icons back after a display change"),
