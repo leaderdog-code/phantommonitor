@@ -292,5 +292,15 @@ powershell -ExecutionPolicy Bypass -File builduild.ps1
 ```
 
 Produces `build/dist/PhantomMonitor.exe` with Python bundled in — roughly 27 MB,
-no dependencies. To build the installer as well, install
-[Inno Setup](https://jrsoftware.org/isdl.php) and run `iscc build\installer.iss`.
+no dependencies.
+
+For the installer as well:
+
+```powershell
+winget install --id JRSoftware.InnoSetup.7 -e
+powershell -ExecutionPolicy Bypass -File builduild_installer.ps1
+```
+
+That produces `build/dist/PhantomMonitor-Setup.exe`. Inno Setup is free for
+non-commercial use; see [their site](https://jrsoftware.org/isdl.php) if you are
+shipping something you sell.
