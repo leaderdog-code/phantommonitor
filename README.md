@@ -255,21 +255,43 @@ timestamps the drop, but not the moment the remote was pressed. Treat it as
 
 ### Why this happens at all
 
-An AV receiver is an HDMI **repeater**. It reads the EDID of whatever is
-downstream of it, merges in its own audio capabilities, and presents that
-combined EDID upstream to the PC — which is why Windows shows you the *TV's*
-hardware id, not the amp's, whenever a TV is awake behind it.
+The root of it: **a PC recognises a display if, and only if, it can read a valid
+EDID over the DDC lines.** Not if a screen is on. Not if a screen exists. A
+readable EDID *is* a monitor, as far as Windows is concerned.
 
-When the downstream screen goes away, the amp swaps back to an EDID of its own,
-then **drops and re-asserts the HPD (Hot Plug Detect) line** to make the PC
-re-read it. To Windows that is indistinguishable from someone yanking the cable
-and plugging it back in, so it re-enumerates every output — which is why all
-your monitors blank and relay for a second in both directions.
+The handshake runs on two pins. The source puts +5 V on pin 18; the sink returns
+it on pin 19, the Hot Plug Detect line. Once HPD is asserted the source reads
+the sink's capabilities. Absence of voltage on HPD means disconnected.
 
-How long the amp waits before doing that is its own firmware's decision. It is
-not specified anywhere, and receivers differ: some keep serving an EDID in
+An AV receiver is an HDMI **repeater**, and a repeater's job is to read the EDID
+of whatever is downstream of it and write that into its own upstream registers,
+so the PC transmits to suit the real display. That is why Windows shows you the
+*TV's* hardware id rather than the amp's whenever a TV is awake behind it — the
+amp is deliberately impersonating the TV, and that is correct behaviour.
+
+When the screen goes away the amp substitutes an EDID of its own, then **drops
+HPD and re-asserts it** to force the PC to re-read. The documented procedure is
+to pull HPD low, wait ~100 ms, load the new EDID, and take it high again, which
+forces the source to reload. To Windows that is indistinguishable from someone
+unplugging the cable and plugging it back in, so it re-enumerates every output —
+which is why all your monitors blank and relay for a second, in both directions.
+
+How long the amp waits before doing any of that is its firmware's decision.
+Repeater drivers are documented as needing "handling to be done when sink turned
+off/on", with no timing specified, and receivers differ: some serve an EDID in
 standby, others drop off the bus entirely and look like a cable plugged into
 nothing. That is why this README gives you a method rather than a number.
+
+There is a second, purely physical reason a dark screen can stay visible. EDID
+is often held in a non-volatile EEPROM wired to the DDC lines, and the DDC's
+pull-up is +5 V supplied over the link itself — so that EEPROM can be read **even
+when the device it belongs to is not powered at all**. Where that is how a
+display is wired, no amount of switching it off will make it disappear, and
+nothing in software can change that. A tick in Settings is then the only answer.
+
+Sources: Analog Devices, *EDID: Extended Display Identification Data* (HDMI FAQ,
+EngineerZone) for the HPD sequence, the repeater EDID flow, and unpowered EEPROM
+reads.
 
 Expect the amp to be given a fresh position when it lets go: the phantom
 reappeared on the opposite side of the desktop from where the TV had been.
