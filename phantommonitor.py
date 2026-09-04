@@ -2028,6 +2028,13 @@ class TrayApp:
             return
         self.settings_child = child
 
+        # Stand the hotkeys down while settings are open. Otherwise pressing a
+        # combination to record it is swallowed by the very hook that is
+        # listening for it, and moves a window instead of filling the box.
+        self._unregister_hotkeys()
+        self._remove_key_hook()
+        log.info("hotkeys suspended while the settings window is open")
+
         def wait_then_reload():
             child.wait()
             win32gui.PostMessage(self.hwnd, WM_APP_SETTINGS_CLOSED, 0, 0)
@@ -2154,7 +2161,10 @@ class TrayApp:
             return 0
 
         if msg == WM_APP_SETTINGS_CLOSED:
-            self._reload_config()
+            self.settings_child = None
+            self._reload_config()      # re-registers hotkeys from the new config
+            self._install_key_hook()
+            log.info("hotkeys resumed")
             return 0
 
         if msg == win32con.WM_TIMER:

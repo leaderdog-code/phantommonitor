@@ -33,6 +33,19 @@ KEYSYM_NAMES = {
     "space": "space", "Insert": "insert", "Delete": "delete",
     "Escape": "esc", "Tab": "tab", "Pause": "pause", "Cancel": "break",
 }
+# Windows virtual key codes. Tk reports these in event.keycode, and unlike the
+# character they do not change with the keyboard layout or with AltGr.
+VK_NAMES = {}
+VK_NAMES.update(dict((0x30 + n, str(n)) for n in range(10)))            # 0-9
+VK_NAMES.update(dict((0x41 + n, chr(ord("a") + n)) for n in range(26)))  # a-z
+VK_NAMES.update(dict((0x70 + n, "f%d" % (n + 1)) for n in range(24)))    # F1-F24
+VK_NAMES.update({
+    0x25: "left", 0x26: "up", 0x27: "right", 0x28: "down",
+    0x24: "home", 0x23: "end", 0x21: "pageup", 0x22: "pagedown",
+    0x20: "space", 0x2D: "insert", 0x2E: "delete",
+    0x1B: "esc", 0x09: "tab", 0x13: "pause", 0x03: "break",
+})
+
 MODIFIER_KEYSYMS = ("Control_L", "Control_R", "Alt_L", "Alt_R", "Shift_L",
                     "Shift_R", "Win_L", "Win_R", "Super_L", "Super_R")
 
@@ -75,7 +88,13 @@ def capture_hotkey(event, var):
     if not mods or mods == ["shift"]:
         return None  # plain typing - leave the entry alone
 
-    name = KEYSYM_NAMES.get(event.keysym)
+    # Prefer the virtual key code over the character. Ctrl+Alt is AltGr, so on
+    # many layouts that combination produces a symbol rather than the key's own
+    # character - ctrl+alt+shift+4 arrives as something that is not "4" at all.
+    # The physical key is a 4 whatever the layout decides it should type.
+    name = VK_NAMES.get(getattr(event, "keycode", None))
+    if name is None:
+        name = KEYSYM_NAMES.get(event.keysym)
     if name is None:
         if len(event.keysym) == 1 and event.keysym.isalnum():
             name = event.keysym.lower()
