@@ -62,12 +62,10 @@ DEFAULT_CONFIG = {
     "block_cursor": False,
     # Put desktop icons back after a display change scrambles them.
     # Put windows back where they were after a display change moves them.
-    # OFF by default: it currently reapplies the whole layout saved for an
-    # arrangement, including windows the display change never touched, so
-    # returning to an arrangement can drag windows back to where they sat the
-    # last time it existed. Icons do not have this problem - Explorer really
-    # does scramble all of them, so reapplying all of them is correct.
-    "restore_windows": False,
+    # Restores only the windows a display change actually displaced, by
+    # comparing against a snapshot frozen the moment the change began. Windows
+    # the change did not touch are left strictly alone.
+    "restore_windows": True,
     "window_save_debounce_ms": 2000,
     "restore_icons": True,
     # Saves are triggered by actually moving an icon, not by a timer. This is
@@ -794,6 +792,21 @@ def windowed_rect(dst, fraction):
     return dl + ((dr - dl) - width) // 2, dt + ((db - dt) - height) // 2, width, height
 
 
+def window_displaced(hwnd, placement, cfg):
+    """Has this window moved since `placement` was recorded?
+
+    The whole basis of window restore: if a window still sits exactly where the
+    snapshot says, the display change did not touch it and neither should we.
+    """
+    try:
+        if not win32gui.IsWindow(hwnd) or not is_manageable(hwnd, cfg):
+            return False
+        current = win32gui.GetWindowPlacement(hwnd)
+    except Exception:
+        return False
+    return not (current[1] == placement[1] and current[4] == placement[4])
+
+
 def pick_menu_target(last_focused, cfg, current=None):
     """The window the tray menu should act on.
 
@@ -1254,8 +1267,9 @@ class TrayApp:
         self.icons_quiet_until = 0.0  # do not snapshot while a change is settling
         self.icon_listview = 0
         self.icon_watch_stop = None
-        self.window_layouts = {}  # {arrangement: {hwnd: placement}}, per session
-        self.last_signature = ""  # only restore when the layout actually changed
+        self.window_snapshot = {}   # {hwnd: placement} - the last known good state
+        self.windows_frozen = False  # stop snapshotting while a change is underway
+        self.last_signature = ""     # only restore when the layout actually changed
         self.hotkeys = resolve_hotkeys(cfg)  # {0: rescue, N: monitor N}
         self.settle_left = 0
         self.icon_active = 0
@@ -1441,6 +1455,9 @@ class TrayApp:
                 if len(self.guard.last_touch) > 500:
                     self.guard.last_touch.clear()
                 self.guard.check_window(hwnd, "moved")
+                # Also covers maximize, snap and app-driven moves, none of which
+                # produce a MOVESIZEEND the way a mouse drag does.
+                self._windows_moved()
                 return
             if event == EVENT_SYSTEM_FOREGROUND:
                 if is_manageable(hwnd, self.cfg):
@@ -1458,46 +1475,63 @@ class TrayApp:
     # by window handle, which is exact: these are the same windows that were
     # open a moment ago, so there is no guessing which window is which.
     def _windows_moved(self):
-        """A window finished being dragged. Debounce, so one drag means one save."""
-        if not self.cfg.get("restore_windows", True):
+        """A window moved. Debounce, so one drag session means one snapshot."""
+        if not self.cfg.get("restore_windows", True) or self.windows_frozen:
             return
         user32.KillTimer(self.hwnd, TIMER_WINDOWS)
         delay = max(500, int(self.cfg.get("window_save_debounce_ms", 2000)))
         user32.SetTimer(self.hwnd, TIMER_WINDOWS, delay, None)
 
     def _snapshot_windows(self, reason="moved"):
-        if not self.cfg.get("restore_windows", True):
+        """Record where every window is *now* - the last known good state.
+
+        Deliberately one live snapshot rather than one per display arrangement.
+        The question worth answering after a display change is "which windows
+        did that just move?", not "where were these last time this arrangement
+        existed" - the latter reapplies a historical layout over whatever the
+        user has done since, and drags windows the change never touched.
+        """
+        if not self.cfg.get("restore_windows", True) or self.windows_frozen:
             return 0
-        layout = {}
+        snapshot = {}
         hwnds = []
         win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
         for hwnd in hwnds:
             if not is_manageable(hwnd, self.cfg):
                 continue
             try:
-                layout[hwnd] = win32gui.GetWindowPlacement(hwnd)
+                snapshot[hwnd] = win32gui.GetWindowPlacement(hwnd)
             except Exception:
                 continue
-        if not layout:
+        if not snapshot:
             return 0
-        self.window_layouts[topology_signature(self.guard.monitors)] = layout
-        log.debug("window layout saved [%s]: %d windows", reason, len(layout))
-        return len(layout)
+        self.window_snapshot = snapshot
+        log.debug("window snapshot [%s]: %d windows", reason, len(snapshot))
+        return len(snapshot)
 
     def _restore_windows(self, reason="display change"):
-        if not self.cfg.get("restore_windows", True):
+        """Put back only the windows the display change actually displaced.
+
+        The snapshot was frozen the moment the change began, so any window whose
+        placement now differs was moved by the change and not by the user. A
+        window still sitting where the snapshot says is left strictly alone.
+        """
+        if not self.cfg.get("restore_windows", True) or not self.window_snapshot:
             return 0
-        layout = self.window_layouts.get(topology_signature(self.guard.monitors))
-        if not layout:
-            return 0
-        restored = 0
-        for hwnd, placement in layout.items():
+        restored = skipped = 0
+        for hwnd, placement in self.window_snapshot.items():
             try:
-                if not win32gui.IsWindow(hwnd) or not is_manageable(hwnd, self.cfg):
-                    continue
+                if not window_displaced(hwnd, placement, self.cfg):
+                    continue  # untouched by the change - do not interfere
                 current = win32gui.GetWindowPlacement(hwnd)
-                if current[1] == placement[1] and current[4] == placement[4]:
-                    continue  # already where it belongs
+                # Only put it back somewhere that still exists.
+                ox, oy = self.guard.workspace_offset()
+                n = placement[4]
+                target = (n[0] + ox, n[1] + oy, n[2] + ox, n[3] + oy)
+                if monitor_of_rect(target, self.guard.monitors,
+                                   require_overlap=True) is None:
+                    skipped += 1
+                    continue
                 wanted = placement
                 if current[1] == win32con.SW_SHOWMINIMIZED:
                     # Leave it minimized; just correct where it will reappear.
@@ -1507,8 +1541,9 @@ class TrayApp:
                 restored += 1
             except Exception:
                 continue
-        if restored:
-            log.info("restored %d window position(s) [%s]", restored, reason)
+        if restored or skipped:
+            log.info("put back %d displaced window(s) [%s]%s", restored, reason,
+                     "; %d skipped, their old spot is gone" % skipped if skipped else "")
         return restored
 
     # -- desktop icon layouts
@@ -2005,6 +2040,7 @@ class TrayApp:
                         # the last snapshot, yanking windows while they work.
                         log.info("display event with no layout change; "
                                  "nothing to restore")
+                        self.windows_frozen = False
                     else:
                         log.info("layout changed; restoring")
                         self.last_signature = sig
@@ -2016,6 +2052,8 @@ class TrayApp:
                         # events; stay quiet briefly so it does not re-save
                         # what it just did.
                         self.icons_quiet_until = time.monotonic() + 10
+                        self.windows_frozen = False
+                        self._snapshot_windows("after restore")
             return 0
 
         if msg in (win32con.WM_DISPLAYCHANGE, win32con.WM_DEVICECHANGE):
@@ -2025,8 +2063,10 @@ class TrayApp:
             self.guard.refresh_monitors()
             self._rebuild_hotkeys()
             self.settle_left = 6
-            # Do not snapshot icons while Explorer is mid-scramble, or the
-            # scrambled positions would overwrite the good saved layout.
+            # Freeze both snapshots for the duration. Whatever they hold right
+            # now is "before the change", which is exactly what a restore needs
+            # to compare against.
+            self.windows_frozen = True
             self.icons_quiet_until = time.monotonic() + 30
             user32.SetTimer(self.hwnd, TIMER_SETTLE, 700, None)
             return 0

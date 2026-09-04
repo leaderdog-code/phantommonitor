@@ -346,6 +346,30 @@ cfg["hotkey_targets"] = {}
 check("with no pin it is a plain number lookup",
       guard.target_for(1) is guard.by_number(1))
 
+# 20 - window restore must put back only what a display change displaced. A
+#      window still sitting where the snapshot recorded it is left alone;
+#      reapplying a whole saved layout drags windows nothing had touched.
+win32gui.SetWindowPos(hwnd, 0, mon1.work[0] + 400, mon1.work[1] + 400, 700, 500,
+                      win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+root.update()
+snapshot = win32gui.GetWindowPlacement(hwnd)
+check("an unmoved window counts as untouched",
+      not mg.window_displaced(hwnd, snapshot, cfg))
+
+win32gui.SetWindowPos(hwnd, 0, mon1.work[0] + 60, mon1.work[1] + 60, 700, 500,
+                      win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+root.update()
+check("a moved window counts as displaced",
+      mg.window_displaced(hwnd, snapshot, cfg))
+
+win32gui.SetWindowPlacement(hwnd, snapshot)
+root.update()
+check("restoring the snapshot puts it back exactly",
+      not mg.window_displaced(hwnd, snapshot, cfg),
+      str(win32gui.GetWindowRect(hwnd)))
+check("a dead window is never displaced",
+      not mg.window_displaced(999999999, snapshot, cfg))
+
 root.destroy()
 print()
 failed = [r for r in results if r[0] == FAIL]

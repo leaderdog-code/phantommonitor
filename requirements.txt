@@ -1,0 +1,5 @@
+# Required: Windows API access
+pywin32>=306
+
+# Optional: draws the tray icon. Without it a stock Windows icon is used.
+pillow>=10.0
