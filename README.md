@@ -88,7 +88,7 @@ Neither needs Python. Both have it bundled inside.
 
 ## Requirements
 
-- Windows 10 or 11
+- Windows 10 or 11 (see below for older)
 - Any graphics card — NVIDIA, AMD or Intel. EDID is a VESA standard, not a
   vendor feature, and every display is read through standard Windows APIs
   (`EnumDisplayDevices`, `QueryDisplayConfig`, the cached EDID in the registry).
@@ -268,6 +268,25 @@ python test_guard.py
 Stop the tray app first — it will rescue the test fixtures mid-assertion, and
 the suite refuses to run while it's live. The tests drive real windows on your
 real displays.
+
+## Older Windows
+
+| Version | Status |
+|---------|--------|
+| Windows 10 / 11 | Tested |
+| Windows 8.1 | Should work — untested, reports welcome |
+| Windows 7 | Will not run as built |
+
+The Windows APIs used here all predate Windows 7, and the two newer ones
+degrade on purpose: per-monitor DPI v2 (Windows 10) falls back to the 8.1 API
+and then the Vista one, and the cloaked-window check (`DWMWA_CLOAKED`,
+Windows 8) simply reports false where it does not exist — which is correct on
+an OS without virtual desktops.
+
+Python is the actual barrier. Python 3.9 dropped Windows 7, so the packaged
+executable will not launch there; it would need building against Python 3.8,
+which is itself end-of-life. If you are on 8.1 the executable ought to run —
+if you try it, please open an issue either way.
 
 ## Known limits
 
