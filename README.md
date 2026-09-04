@@ -38,11 +38,10 @@ disconnecting it kills the sound you plugged the amp in for.
 PhantomMonitor fixes it in software: it watches for windows arriving on a blocked
 display and evacuates them, typically in under 10ms, so you never see it happen.
 
-It is not really a Windows fault, and not Windows-specific — Linux and macOS see
-the same phantom. HDMI carries audio inside the video stream, so **anything that
-accepts HDMI audio has to present itself as a display**. There is no audio-only
-mode to fall back on. Soundbars with an HDMI input, HDMI audio extractors and
-capture cards all do it for the same reason a receiver does.
+Not Windows-specific either — Linux and macOS see the same phantom. And it is not
+only receivers: **anything that accepts HDMI audio has to present as a display**,
+so soundbars with an HDMI input, HDMI audio extractors and capture cards all do
+it for the same reason.
 
 The same thing happens with anything else that sits between the graphics card
 and a panel and holds the link up on its own: a **DisplayPort-to-HDMI
@@ -133,11 +132,12 @@ Neither needs Python. Both have it bundled inside.
 > your PC" for any program from a publisher it has not seen before, which is
 > every small free tool without a paid code-signing certificate. Click **More
 > info → Run anyway**. The source is right here if you would rather read it or
-> build it yourself, and each release links a VirusTotal scan.
+> build it yourself. Each release lists SHA-256 hashes so you can
+> confirm the file you downloaded is the one that was published.
 
 ## Running from source
 
-## Requirements
+### Requirements
 
 - Windows 10 or 11 (see below for older)
 - Any graphics card — NVIDIA, AMD or Intel. EDID is a VESA standard, not a
