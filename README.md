@@ -239,15 +239,19 @@ Neither amp reacts the moment you press the TV's power button. Both hold the
 last good EDID for a few minutes first, so a screen you have just switched off
 still looks fully present to Windows.
 
-Measured here by polling the display list once a second, with the TV switched
-off at the set:
+Observed here, with the TV switched off at the set and the display list polled
+once a second:
 
 - **Yamaha HTR-4063** — went on reporting the Toshiba's `TSB0210` at 1920×1080
-  for **4 minutes 44 seconds**, then dropped to its own `YMH3148`, still
-  1920×1080. The guard saw the change and raised the pointer fence 2 seconds
-  later.
-- **Denon** — held on for a comparable few minutes, then fell back to 800×600
-  under its own `DON0015`
+  for a good while after the screen went dark, then dropped to its own
+  `YMH3148`, still 1920×1080. The guard saw the change and raised the pointer
+  fence 2 seconds later.
+- **Denon** — likewise held on, then fell back to 800×600 under its own
+  `DON0015`
+
+The delay has not been timed precisely enough to publish a figure — the poller
+timestamps the drop, but not the moment the remote was pressed. Treat it as
+"minutes, not seconds", and measure your own before relying on it.
 
 Expect the amp to be given a fresh position when it lets go: the phantom
 reappeared on the opposite side of the desktop from where the TV had been.
