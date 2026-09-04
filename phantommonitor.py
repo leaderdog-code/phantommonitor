@@ -43,6 +43,10 @@ CONFIG_PATH = os.path.join(APP_DIR, "config.json")
 LOG_DIR = os.path.join(APP_DIR, "logs")
 LOG_PATH = os.path.join(LOG_DIR, "phantommonitor.log")
 ICON_LAYOUT_PATH = os.path.join(APP_DIR, "icon_layouts.json")
+PROJECT_URL = "https://github.com/leaderdog-code/phantommonitor"
+RELEASES_URL = PROJECT_URL + "/releases"
+LATEST_API = "https://api.github.com/repos/leaderdog-code/phantommonitor/releases/latest"
+APP_VERSION = "1.0.0"   # keep in step with AppVersion in build/installer.iss
 STARTUP_VBS = os.path.join(
     os.environ.get("APPDATA", ""),
     "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
@@ -105,6 +109,13 @@ DEFAULT_CONFIG = {
     # notepad.exe, which every Windows install has. A name on PATH or a full
     # path both work, and environment variables are expanded.
     "editor": "",
+    # Where "Support this project" points. Empty hides the menu item entirely -
+    # nobody should have a donation link nagging them from a tray menu they did
+    # not ask for one in.
+    "support_url": "",
+    # Off by default. Checking asks GitHub for the latest release, which means
+    # contacting a server, and a tray utility should not do that unasked.
+    "check_updates_on_start": False,
     "log_level": "INFO",
 }
 
@@ -237,6 +248,40 @@ def set_dpi_awareness():
         return "system"
     except OSError:
         return "none"
+
+
+def version_tuple(text):
+    """'v1.2.3' -> (1, 2, 3), ignoring anything that is not a number."""
+    parts = []
+    for chunk in str(text).lstrip("vV").split("."):
+        digits = "".join(c for c in chunk if c.isdigit())
+        parts.append(int(digits) if digits else 0)
+    return tuple(parts) or (0,)
+
+
+def latest_release(timeout=6):
+    """The newest published tag, or None if it cannot be reached."""
+    import json as _json
+    import urllib.request
+    request = urllib.request.Request(
+        LATEST_API, headers={"Accept": "application/vnd.github+json",
+                             "User-Agent": "PhantomMonitor/" + APP_VERSION})
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return _json.loads(response.read().decode("utf-8")).get("tag_name")
+    except Exception as exc:
+        log.info("update check failed: %s", exc)
+        return None
+
+
+def open_url(url):
+    """Open a link in whatever the user's browser is."""
+    try:
+        os.startfile(url)
+        return True
+    except OSError as exc:
+        log.error("could not open %s: %s", url, exc)
+        return False
 
 
 def open_text_file(path, editor=""):
@@ -1400,6 +1445,8 @@ class TrayApp:
         self._snapshot_icons("startup")
         self._snapshot_windows("startup")
         self._start_icon_watch()
+        if self.cfg.get("check_updates_on_start", False):
+            self._check_updates(quiet=True)
 
     # -- window plumbing
     def _create_window(self):
@@ -1962,6 +2009,13 @@ class TrayApp:
             win32gui.DestroyMenu(move_menu)
         sep()
 
+        add("Check for updates", self._check_updates)
+        add("Project page", lambda: open_url(PROJECT_URL))
+        support = (self.cfg.get("support_url") or "").strip()
+        if support:
+            add("Support this project", lambda: open_url(support))
+        sep()
+
         add("Start with Windows", self._toggle_autostart,
             checked=os.path.exists(STARTUP_VBS))
         editor = self.cfg.get("editor", "")
@@ -2036,6 +2090,33 @@ class TrayApp:
     def _make_move_action(self, number):
         target = self.menu_target  # bind now, not when the item is clicked
         return lambda: self.guard.move_active_to(number, target, "tray menu")
+
+    def _check_updates(self, quiet=False):
+        """Ask GitHub for the newest release. Off the message loop - a network
+        call must never be able to freeze the tray."""
+        def look():
+            tag = latest_release()
+            if tag is None:
+                if not quiet:
+                    win32api.MessageBox(
+                        0, "Could not reach GitHub to check for updates.",
+                        APP_NAME, win32con.MB_OK | win32con.MB_ICONINFORMATION)
+                return
+            if version_tuple(tag) > version_tuple(APP_VERSION):
+                log.info("update available: %s (running %s)", tag, APP_VERSION)
+                message = ("%s is available - you have %s.\n\n"
+                           "Open the downloads page?" % (tag, APP_VERSION))
+                answer = win32api.MessageBox(
+                    0, message, APP_NAME,
+                    win32con.MB_YESNO | win32con.MB_ICONINFORMATION)
+                if answer == win32con.IDYES:
+                    open_url(RELEASES_URL)
+            elif not quiet:
+                win32api.MessageBox(
+                    0, "You have the latest version (%s)." % APP_VERSION,
+                    APP_NAME, win32con.MB_OK | win32con.MB_ICONINFORMATION)
+
+        threading.Thread(target=look, daemon=True).start()
 
     def _open_settings(self):
         """Run the settings window as a child process.

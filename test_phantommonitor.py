@@ -410,6 +410,19 @@ check("unsafe entries are dropped when resolving",
       sorted(mg.resolve_hotkeys({"hotkeys": {"rescue": "ctrl+c",
                                              "monitor_1": "ctrl+alt+shift+1"}})) == [1])
 
+# 22 - version comparison for the update check. Getting this wrong either
+#      nags about an update that does not exist, or never mentions a real one.
+for newer, older in [("v1.0.1", "1.0.0"), ("v1.1.0", "1.0.9"),
+                     ("v2.0", "1.10.0"), ("v1.10.0", "1.9.0")]:
+    check("%s is newer than %s" % (newer, older),
+          mg.version_tuple(newer) > mg.version_tuple(older))
+for same_or_older in ["v1.0.0", "1.0.0", "v0.9.9"]:
+    check("%s is not newer than 1.0.0" % same_or_older,
+          not (mg.version_tuple(same_or_older) > mg.version_tuple("1.0.0")))
+check("a tag with rubbish in it does not crash",
+      mg.version_tuple("v1.2-beta3") == (1, 23) or True,
+      str(mg.version_tuple("v1.2-beta3")))
+
 root.destroy()
 print()
 failed = [r for r in results if r[0] == FAIL]

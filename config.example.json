@@ -30,5 +30,7 @@
   "ignore_window_classes": [],
   "_editor_help": "Editor for the tray's 'Edit settings' and 'View log' items. Empty means notepad.exe, which every Windows install has. A name on PATH or a full path both work.",
   "editor": "",
+  "_support_help": "A donate or sponsor link for the tray menu. Leave empty and the menu item does not appear at all.",
+  "support_url": "",
   "log_level": "INFO"
 }
