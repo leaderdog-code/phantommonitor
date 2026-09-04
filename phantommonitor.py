@@ -592,6 +592,34 @@ def cursor_clip_rect(monitors, blocked):
     return box
 
 
+# EDID vendor codes belonging to AV equipment rather than display makers. A
+# receiver names itself in its EDID - "DENON-AVAMP", "HTR-4063" - which is a far
+# better signal than resolution: a Yamaha advertises a full 1920x1080 with
+# nothing attached, so no size rule can spot it, but it still says what it is.
+AV_VENDORS = {
+    "DON": "Denon", "YMH": "Yamaha", "ONK": "Onkyo", "PIO": "Pioneer",
+    "MAR": "Marantz", "HAR": "Harman", "INT": "Integra", "NAD": "NAD",
+    "ARC": "Arcam", "SON": "Sony AV", "TEA": "TEAC",
+}
+AV_NAME_HINTS = ("avamp", "av amp", "receiver", "avr", "amplifier", "soundbar",
+                 "htr-", "rx-v", "vsx-", "sr-", "extractor", "splitter")
+
+
+def looks_like_av_device(hwid, name):
+    """A guess at whether a display is really an amp, switch or extractor.
+
+    Only ever used to suggest - never to block anything on its own. Being wrong
+    here should cost a line of text, nothing more.
+    """
+    vendor = AV_VENDORS.get((hwid or "")[:3].upper())
+    if vendor:
+        return vendor
+    lowered = (name or "").lower()
+    if any(hint in lowered for hint in AV_NAME_HINTS):
+        return "AV device"
+    return None
+
+
 def parse_block_spec(spec):
     """Parse a block rule into (hwid, size, smaller_than).
 
@@ -2524,6 +2552,10 @@ def print_diagnostics(cfg):
                       for r in cfg.get("blocked_hwids", []))
         print("%s   (hotkey slot %d)" % (mon.name, mon.number))
         print("   hardware id : %s" % (mon.hwid or "?"))
+        hint = looks_like_av_device(mon.hwid, mon.name)
+        if hint:
+            print("   looks like  : %s, not a display - a likely thing to block"
+                  % hint)
         print("   gdi device  : %s%s" % (mon.device, "  (primary)" if mon.primary else ""))
         print("   bounds      : %s" % (mon.rect,))
         print("   work area   : %s" % (mon.work,))
@@ -2583,7 +2615,9 @@ def main():
             rules = cfg.get("blocked_hwids", [])
             blocked = (" [BLOCKED]"
                        if any(monitor_matches_block(mon, r) for r in rules) else "")
-            print("  hotkey %d   %s%s" % (mon.number, mon.label(), blocked))
+            hint = looks_like_av_device(mon.hwid, mon.name)
+            note = ("   <-- looks like a %s, not a monitor" % hint) if hint else ""
+            print("  hotkey %d   %s%s%s" % (mon.number, mon.label(), blocked, note))
         return 0
 
     guard = Guard(cfg)

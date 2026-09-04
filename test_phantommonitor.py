@@ -451,6 +451,24 @@ cfg["app_displays"] = {}
 check("no pin means no assigned display",
       guard.assigned_display(hwnd) is None)
 
+# 24 - an amp names itself in its EDID, which is a far better signal than
+#      resolution: a Yamaha advertises 1920x1080 with nothing attached, so no
+#      size rule can spot it, but it still says "HTR-4063".
+for hwid, name, expected in [
+    ("DON0015", "DENON-AVAMP", "Denon"),
+    ("YMH3148", "HTR-4063", "Yamaha"),
+    ("ONK1234", "TX-NR609", "Onkyo"),
+    ("GSM5BBF", "LG ULTRAGEAR+", None),
+    ("TSB0210", "TOSHIBA-TV", None),
+    ("ABC0001", "Dell U2720Q", None),
+    ("ZZZ9999", "HDMI Audio Extractor", "AV device"),
+]:
+    got = mg.looks_like_av_device(hwid, name)
+    check("%s reads as %s" % (name, expected or "a display"), got == expected,
+          str(got))
+check("a blank display does not crash the guess",
+      mg.looks_like_av_device("", "") is None)
+
 root.destroy()
 print()
 failed = [r for r in results if r[0] == FAIL]

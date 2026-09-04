@@ -39,6 +39,35 @@ RESERVED = {
 }
 
 
+# Kept in step with phantommonitor.py. Duplicated for the same reason
+# unsafe_hotkey is: this runs as its own process, where importing the main
+# module would re-execute it.
+AV_VENDORS = {
+    "DON": "Denon", "YMH": "Yamaha", "ONK": "Onkyo", "PIO": "Pioneer",
+    "MAR": "Marantz", "HAR": "Harman", "INT": "Integra", "NAD": "NAD",
+    "ARC": "Arcam", "SON": "Sony AV", "TEA": "TEAC",
+}
+AV_NAME_HINTS = ("avamp", "av amp", "receiver", "avr", "amplifier", "soundbar",
+                 "htr-", "rx-v", "vsx-", "sr-", "extractor", "splitter")
+
+
+def looks_like_av_device(hwid, name):
+    """A guess at whether a display is really an amp, switch or extractor.
+
+    Only ever used to suggest, never to block anything on its own. An amp names
+    itself in its EDID - "DENON-AVAMP", "HTR-4063" - which is a far better
+    signal than resolution, since a Yamaha advertises a full 1920x1080 with
+    nothing attached to it at all.
+    """
+    vendor = AV_VENDORS.get((hwid or "")[:3].upper())
+    if vendor:
+        return vendor
+    lowered = (name or "").lower()
+    if any(hint in lowered for hint in AV_NAME_HINTS):
+        return "AV device"
+    return None
+
+
 def unsafe_hotkey(spec):
     """Return why a combination must not be bound, or None if it is fine.
 
@@ -103,8 +132,10 @@ def run(config_path, monitors):
 
     block_vars, slot_vars = {}, {}
     for row, (name, hwid, w, h, x, y, primary) in enumerate(ordered, start=1):
-        text = "%s\n%d×%d  [%s]  at %d,%d%s" % (
-            name, w, h, hwid, x, y, "   ★ primary" if primary else "")
+        hint = looks_like_av_device(hwid, name)
+        text = "%s\n%d×%d  [%s]  at %d,%d%s%s" % (
+            name, w, h, hwid, x, y, "   ★ primary" if primary else "",
+            ("\n%s — an amp or adapter, not a display" % hint) if hint else "")
         ttk.Label(box, text=text, justify="left").grid(
             row=row, column=0, sticky="w", padx=(10, 4), pady=3)
 
