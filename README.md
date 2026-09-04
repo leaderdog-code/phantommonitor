@@ -21,10 +21,11 @@ modern kit is immune:
   on for music, and the receiver falls back to advertising its own EDID - so it
   becomes a phantom display on a setup that was fine a minute ago.
 
-The receiver reports a fallback EDID — often 800×600 — so Windows treats it as
-real desktop space and cheerfully puts windows there. They are invisible and
-unreachable. The classic escape is powering the amp off, which dumps them back
-the moment you power it on again.
+Either way Windows treats that phantom as real desktop space and puts windows
+on it, where they are invisible and unreachable. The usual workaround is to
+switch the amp off until the display drops away and Windows drags the windows
+back — which costs you the sound the amp is there for, and lasts only until it
+wakes up again.
 
 **This is an HDMI-introduced problem, not a Windows bug.** HDMI carries audio
 and video on the same link, so anything you send audio to has to look like a
