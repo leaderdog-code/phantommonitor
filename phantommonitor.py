@@ -123,7 +123,7 @@ DEFAULT_CONFIG = {
     "not_av_devices": [],
     "cursor_lock_apps": [],
     "cursor_lock_fullscreen": True,
-    "cursor_never_lock": ["mstsc.exe"],
+    "cursor_never_lock": ["mstsc.exe", "explorer.exe"],
     "settings_zoom": 1.0,
     "app_displays": {},
     "app_positions": {},
@@ -890,7 +890,7 @@ def covers_monitor(rect, mon, fraction=0.95):
 
 
 def cursor_lock_rect(rect, monitors, blocked, app, lock_apps,
-                     never_lock=(), lock_fullscreen=True):
+                     never_lock=(), lock_fullscreen=True, borderless=False):
     """The display to confine the pointer to for a full-screen app, or None.
 
     Default is to hold it. A full-screen app is one the user is inside, and
@@ -915,7 +915,15 @@ def cursor_lock_rect(rect, monitors, blocked, app, lock_apps,
     if not rect or not monitors:
         return None
     host = monitor_of_rect(rect, monitors, require_overlap=True)
-    if host is None or host in blocked or not covers_monitor(rect, host):
+    if host is None or host in blocked:
+        return None
+    # Genuinely full-screen, not merely maximized. A maximized window
+    # stops at the taskbar and still clears the 95% covers_monitor bar,
+    # so that alone would hold the pointer inside any maximized browser.
+    # The desktop itself is worse: Explorer owns a window the size of the
+    # screen, so clicking the wallpaper would trap the mouse on that
+    # monitor. Real full-screen covers the taskbar too and has no frame.
+    if not borderless or not covers_monitor(rect, host, fraction=0.995):
         return None
     name = (app or "").strip().lower()
     if name and name in set(a.strip().lower() for a in lock_apps or () if a):
@@ -1646,7 +1654,7 @@ class TrayApp:
         self.key_hook = None
         self.key_proc = None
         self.cursor_clipped = False
-        self.cursor_locked_app = False   # a listed app is holding the pointer
+        self.cursor_locked_app = ""      # exe currently holding the pointer
         self.clip_warned = False
         self.icons_warned = False
         self.icons_quiet_until = 0.0  # do not snapshot while a change is settling
@@ -2085,30 +2093,31 @@ class TrayApp:
         # and ours lands just after its focus-gain, imposing the fence here is
         # what knocks the cursor out of a game edge on alt-tab back in.
         try:
-            fg = win32gui.GetForegroundWindow()
+            fg = win32gui.GetForegroundWindow() or None
             fg_rect = win32gui.GetWindowRect(fg) if fg else None
             fg_app = process_name(fg) if fg else ""
         except Exception:
-            fg_rect, fg_app = None, ""
+            fg, fg_rect, fg_app = None, None, ""
         # Listed apps get the pointer actively held inside them, re-applied on
         # every sweep - which is what makes it come back after an alt-tab out.
         lock = cursor_lock_rect(
             fg_rect, self.guard.monitors, self.guard.blocked(), fg_app,
             self.cfg.get("cursor_lock_apps"),
             self.cfg.get("cursor_never_lock"),
-            self.cfg.get("cursor_lock_fullscreen", True))
+            self.cfg.get("cursor_lock_fullscreen", True),
+            borderless=(fg is not None and not is_user_movable(fg)))
         if lock is not None:
             held = wt.RECT(lock[0], lock[1], lock[2], lock[3])
             if user32.ClipCursor(ctypes.byref(held)):
-                if not self.cursor_locked_app:
+                if self.cursor_locked_app != fg_app:
                     log.info("holding the pointer inside %s on %s",
                              fg_app, lock)
-                self.cursor_locked_app = True
+                self.cursor_locked_app = fg_app
             self.cursor_clipped = False
             return
         if self.cursor_locked_app:
             log.info("released the pointer from %s", self.cursor_locked_app)
-            self.cursor_locked_app = False
+            self.cursor_locked_app = ""
 
         if app_owns_cursor(fg_rect, self.guard.monitors, self.guard.blocked()):
             if self.cursor_clipped:

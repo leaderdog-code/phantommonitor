@@ -475,6 +475,21 @@ for hwid, name, expected in [
     got = mg.looks_like_av_device(hwid, name)
     check("%s reads as %s" % (name, expected or "a display"), got == expected,
           str(got))
+# Maximized is not full-screen. A maximized window stops at the taskbar and
+# still clears the 95% coverage bar, and the desktop is a screen-sized Explorer
+# window - either would trap the mouse on one monitor during ordinary use.
+MAXI = next(m for m in guard.monitors if m.primary)
+maxi_rect = (MAXI.rect[0], MAXI.rect[1], MAXI.rect[2], MAXI.rect[3] - 60)
+check("a maximized window does not hold the pointer",
+      mg.cursor_lock_rect(maxi_rect, guard.monitors, [], "chrome.exe",
+                          [], [], True, True) is None)
+check("a framed window filling the screen does not hold the pointer",
+      mg.cursor_lock_rect(MAXI.rect, guard.monitors, [], "chrome.exe",
+                          [], [], True, False) is None)
+check("the desktop never holds the pointer",
+      mg.cursor_lock_rect(MAXI.rect, guard.monitors, [], "explorer.exe",
+                          [], ["mstsc.exe", "explorer.exe"], True, True) is None)
+
 # A screen with an app pinned to it is reserved, not banished. Fencing the
 # pointer out of it would leave a chat monitor nobody can answer on.
 BLOCKED_ALL = [m for m in guard.monitors if not m.primary]
@@ -494,19 +509,19 @@ check("no pins at all leaves every blocked display fenced",
 FS = next(m for m in guard.monitors if m.primary)
 check("a full-screen app holds the pointer by default",
       mg.cursor_lock_rect(FS.rect, guard.monitors, [], "somegame.exe",
-                          [], ["mstsc.exe"], True) == FS.rect)
+                          [], ["mstsc.exe"], True, True) == FS.rect)
 check("full-screen RDP is excluded, so the pointer stays free",
       mg.cursor_lock_rect(FS.rect, guard.monitors, [], "mstsc.exe",
-                          [], ["mstsc.exe"], True) is None)
+                          [], ["mstsc.exe"], True, True) is None)
 check("an explicitly named app beats the exclusion list",
       mg.cursor_lock_rect(FS.rect, guard.monitors, [], "mstsc.exe",
-                          ["mstsc.exe"], ["mstsc.exe"], True) == FS.rect)
+                          ["mstsc.exe"], ["mstsc.exe"], True, True) == FS.rect)
 check("a windowed app never holds the pointer",
       mg.cursor_lock_rect((100, 100, 900, 700), guard.monitors, [],
-                          "somegame.exe", [], [], True) is None)
+                          "somegame.exe", [], [], True, True) is None)
 check("turning the feature off stops it holding anything",
       mg.cursor_lock_rect(FS.rect, guard.monitors, [], "somegame.exe",
-                          [], [], False) is None)
+                          [], [], False, True) is None)
 
 # A full-screen app on an allowed display manages the pointer itself. Ours must
 # stand down, or alt-tabbing back into a game knocks the cursor out of its edge
