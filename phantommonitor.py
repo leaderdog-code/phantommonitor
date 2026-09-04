@@ -120,6 +120,7 @@ DEFAULT_CONFIG = {
     # rather than a display. Only affects what is shown - nothing is blocked on
     # this basis. Worth reporting so the built-in list catches up.
     "av_devices": [],
+    "not_av_devices": [],
     "app_displays": {},
     "app_positions": {},
     "support_url": "",
@@ -609,7 +610,7 @@ AV_NAME_HINTS = ("avamp", "av amp", "receiver", "avr", "amplifier", "soundbar",
                  "htr-", "rx-v", "vsx-", "sr-", "extractor", "splitter")
 
 
-def looks_like_av_device(hwid, name, declared=()):
+def looks_like_av_device(hwid, name, declared=(), denied=()):
     """A guess at whether a display is really an amp, switch or extractor.
 
     Only ever used to suggest - never to block anything on its own. Being wrong
@@ -618,6 +619,11 @@ def looks_like_av_device(hwid, name, declared=()):
     `declared` holds hardware ids the user has marked themselves, for kit the
     built-in list has not caught up with.
     """
+    # An overrule comes first. A three-letter vendor prefix is a guess, and a
+    # wrong one is entirely possible - SON catches a Sony amp and would catch a
+    # Sony display just the same. Whoever is looking at the hardware decides.
+    if hwid and hwid in (denied or ()):
+        return None
     if hwid and hwid in (declared or ()):
         return "marked by you as an amp or adapter"
     vendor = AV_VENDORS.get((hwid or "")[:3].upper())
@@ -2578,12 +2584,13 @@ def print_diagnostics(cfg):
     print()
 
     monitors = enum_monitors()
+    declared, denied = cfg.get("av_devices"), cfg.get("not_av_devices")
     for mon in monitors:
         blocked = any(monitor_matches_block(mon, r)
                       for r in cfg.get("blocked_hwids", []))
         print("%s   (hotkey slot %d)" % (mon.name, mon.number))
         print("   hardware id : %s" % (mon.hwid or "?"))
-        hint = looks_like_av_device(mon.hwid, mon.name, cfg.get("av_devices"))
+        hint = looks_like_av_device(mon.hwid, mon.name, declared, denied)
         if hint:
             print("   looks like  : %s, not a display - a likely thing to block"
                   % hint)
@@ -2615,13 +2622,13 @@ def print_diagnostics(cfg):
                                  "not possible with this layout / nothing blocked",))
     print()
     unknown = [m for m in monitors
-               if not looks_like_av_device(m.hwid, m.name, cfg.get("av_devices"))]
+               if not looks_like_av_device(m.hwid, m.name, declared, denied)]
     if unknown:
         print("If any display above is really an amp, switch or extractor, add its")
         print("hardware id to av_devices in config.json - and please report it, so")
         print("the built-in list catches up.")
         print()
-    if any(looks_like_av_device(m.hwid, m.name, cfg.get("av_devices"))
+    if any(looks_like_av_device(m.hwid, m.name, declared, denied)
            for m in monitors):
         # Both amps tested here sat on the last good EDID for roughly four
         # minutes after the screen went dark. Anyone comparing --diag output
@@ -2669,7 +2676,7 @@ def main():
             blocked = (" [BLOCKED]"
                        if any(monitor_matches_block(mon, r) for r in rules) else "")
             hint = looks_like_av_device(mon.hwid, mon.name,
-                                        cfg.get("av_devices"))
+                                        cfg.get("av_devices"), cfg.get("not_av_devices"))
             note = ("   <-- looks like a %s, not a monitor" % hint) if hint else ""
             print("  hotkey %d   %s%s%s" % (mon.number, mon.label(), blocked, note))
         return 0

@@ -51,7 +51,7 @@ AV_NAME_HINTS = ("avamp", "av amp", "receiver", "avr", "amplifier", "soundbar",
                  "htr-", "rx-v", "vsx-", "sr-", "extractor", "splitter")
 
 
-def looks_like_av_device(hwid, name, declared=()):
+def looks_like_av_device(hwid, name, declared=(), denied=()):
     """A guess at whether a display is really an amp, switch or extractor.
 
     Only ever used to suggest, never to block anything on its own. An amp names
@@ -59,6 +59,8 @@ def looks_like_av_device(hwid, name, declared=()):
     signal than resolution, since a Yamaha advertises a full 1920x1080 with
     nothing attached to it at all.
     """
+    if hwid and hwid in (denied or ()):
+        return None
     if hwid and hwid in (declared or ()):
         return "marked by you as an amp or adapter"
     vendor = AV_VENDORS.get((hwid or "")[:3].upper())
@@ -124,6 +126,7 @@ def run(config_path, monitors, absent=()):
     parked = list(cfg.get("blocked_rules_parked") or [])
     targets = dict(cfg.get("hotkey_targets") or {})
     declared = list(cfg.get("av_devices") or [])
+    denied = list(cfg.get("not_av_devices") or [])
 
     def rule_for(hwid):
         for spec in rules:
@@ -142,8 +145,13 @@ def run(config_path, monitors, absent=()):
     ordered = sorted(monitors, key=lambda m: (assigned_slot(m[1]), m[0]))
 
     block_vars, slot_vars, av_vars = {}, {}, {}
+    # Which ids the built-in vendor list recognised on its own. The tick is
+    # shown for these too - leaving it clear would contradict the "an amp or
+    # adapter" line beside it - but it stays clickable, because a three-letter
+    # prefix is a guess and the person looking at the hardware overrules it.
+    auto_av = set()
     for row, (name, hwid, w, h, x, y, primary) in enumerate(ordered, start=1):
-        hint = looks_like_av_device(hwid, name, declared)
+        hint = looks_like_av_device(hwid, name, declared, denied)
         text = "%s\n%d×%d  [%s]  at %d,%d%s%s" % (
             name, w, h, hwid, x, y, "   ★ primary" if primary else "",
             ("\n%s — an amp or adapter, not a display" % hint) if hint else "")
@@ -161,12 +169,15 @@ def run(config_path, monitors, absent=()):
                      values=["-"] + [str(i) for i in range(1, slot_count + 1)]).grid(
             row=row, column=2, padx=8)
 
-        avar = tk.BooleanVar(value=hwid in declared)
+        if hint and hwid not in declared:
+            auto_av.add(hwid)
+        avar = tk.BooleanVar(value=bool(hint))
         av_vars[hwid] = avar
         ttk.Checkbutton(box, variable=avar).grid(row=row, column=3)
 
     ttk.Label(box, text="Marking something as an amp only labels it - nothing is\n"
-                        "blocked on that basis. Please report unlisted kit so\n"
+                        "blocked on that basis. Tick it for an amp we do not know\n"
+                        "about; untick a wrong guess. Please report unlisted kit so\n"
                         "others benefit.\n"
                         "Listed by hotkey slot. A slot is yours to assign - Windows'\n"
                         "own display numbers cannot be read back, so they are not\n"
@@ -292,7 +303,17 @@ def run(config_path, monitors, absent=()):
         cfg["blocked_hwids"] = new_rules
         cfg["blocked_rules_parked"] = new_parked
         cfg["hotkey_targets"] = new_targets
-        cfg["av_devices"] = sorted(h for h, v in av_vars.items() if v.get())
+        # Two lists, because a tick can mean two different things. Ticking
+        # something the built-in list already knows adds nothing, so only a
+        # genuinely new declaration is stored. Unticking something it DID
+        # recognise is a real decision and has to be remembered, or the guess
+        # would simply come back next time the window opened.
+        shown = set(av_vars)
+        ticked = set(h for h, v in av_vars.items() if v.get())
+        cfg["av_devices"] = sorted(h for h in ticked if h not in auto_av)
+        cfg["not_av_devices"] = sorted(
+            (set(denied) - shown)                       # not attached now
+            | ((shown - ticked) & (auto_av | set(denied))))
         for key, var in toggle_vars.items():
             cfg[key] = bool(var.get())
         cfg["hotkeys"] = new_hotkeys

@@ -478,6 +478,21 @@ for hwid, name, expected in [
 check("a blank display does not crash the guess",
       mg.looks_like_av_device("", "") is None)
 
+# A three-letter vendor prefix is a guess, and SON would catch a Sony display
+# just as readily as a Sony amp. Whoever can see the hardware overrules it, in
+# both directions, and both answers have to survive being written to config.
+check("a recognised amp can be overruled",
+      mg.looks_like_av_device("YMH3148", "HTR-4063", (), ("YMH3148",)) is None)
+check("a wrongly caught display can be overruled",
+      mg.looks_like_av_device("SON1234", "BRAVIA", (), ("SON1234",)) is None)
+check("overruling one id leaves others alone",
+      mg.looks_like_av_device("DON0015", "Denon", (), ("YMH3148",)) == "Denon")
+check("an unknown amp can still be declared",
+      mg.looks_like_av_device("XYZ9999", "Mystery", ("XYZ9999",)) is not None)
+check("overrule beats declaration when both name an id",
+      mg.looks_like_av_device("XYZ9999", "Mystery",
+                              ("XYZ9999",), ("XYZ9999",)) is None)
+
 root.destroy()
 print()
 failed = [r for r in results if r[0] == FAIL]
