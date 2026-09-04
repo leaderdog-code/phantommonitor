@@ -597,6 +597,26 @@ def fenceable(blocked, app_displays):
     return [m for m in blocked if m.hwid not in pinned]
 
 
+def clip_is_owned(cur, fg_rect, fg_app, never_lock=()):
+    """True if the window in front could plausibly have set this clip.
+
+    A cursor clip outlives whatever set it. A game exits with the pointer
+    still confined to where its window was, and deferring to that leaves
+    the user sealed inside a rectangle containing nothing - unable even to
+    reach the tray icon that would undo it.
+
+    So a clip is only somebody else's if it lies inside the foreground
+    window. The shell is excluded: the desktop is screen-sized, so it
+    would vouch for almost any stale rectangle.
+    """
+    if not cur or not fg_rect:
+        return False
+    if (fg_app or "").strip().lower() in set(
+            a.strip().lower() for a in (never_lock or ()) if a):
+        return False
+    return rect_within(cur, fg_rect)
+
+
 def rect_within(inner, outer):
     """True if INNER sits entirely inside OUTER."""
     return (inner[0] >= outer[0] and inner[1] >= outer[1]
@@ -2116,11 +2136,23 @@ class TrayApp:
                 self.cursor_clipped = True   # still ours, nothing to do
                 return
             if rect_within(cur, box):
-                if self.cursor_clipped:
-                    log.info("another app is confining the pointer to %s; "
-                             "leaving its clip alone", cur)
-                self.cursor_clipped = False
-                return
+                # Someone else owns it - but only believe that if the
+                # window in front could plausibly have set it. A clip
+                # outlives the process that made it: a game exits with
+                # the pointer still confined to where its window was, and
+                # deferring to that traps the user inside a rectangle with
+                # nothing in it, with no way to reach the tray icon that
+                # would fix it. Require the clip to lie inside the
+                # foreground window, and never defer to the shell.
+                if clip_is_owned(cur, fg_rect, fg_app,
+                                 self.cfg.get("cursor_never_lock")):
+                    if self.cursor_clipped:
+                        log.info("%s is confining the pointer to %s; "
+                                 "leaving its clip alone", fg_app, cur)
+                    self.cursor_clipped = False
+                    return
+                log.info("stale clip %s belongs to no window in front; "
+                         "taking the pointer back", cur)
         rect = wt.RECT(box[0], box[1], box[2], box[3])
         if user32.ClipCursor(ctypes.byref(rect)):
             if not self.cursor_clipped:
@@ -2221,7 +2253,15 @@ class TrayApp:
 
     def _run_action(self, action):
         if action == 0:
+            # Rescue means "get me out of whatever this is". A stale clip
+            # can seal the pointer into a rectangle with nothing in it,
+            # and the tray icon that would fix it may be outside. Free the
+            # pointer first, then re-fence properly.
+            user32.ClipCursor(None)
+            self.cursor_clipped = False
+            self.cursor_locked_app = ""
             self.guard.sweep("hotkey", include_offscreen=True)
+            self._apply_cursor_clip()
         elif 1 <= action <= 9:
             self.guard.move_active_to(
                 action, pick_menu_target(self.last_focused, self.cfg), "hotkey")

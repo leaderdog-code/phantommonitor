@@ -561,6 +561,25 @@ check("a full-screen window on a BLOCKED display never holds the pointer",
       mg.cursor_lock_rect(GAME_MON.rect, guard.monitors, [GAME_MON],
                           "somegame.exe", [], [], True, True) is None)
 
+# A cursor clip outlives whatever set it. A game exits with the pointer still
+# confined to where its window was, and deferring to that seals the user inside
+# a rectangle with nothing in it - unable to reach the tray icon that would
+# undo it. Only believe a clip belongs to someone if the window in front could
+# actually have set it.
+GAME_WIN = (0, 0, 1920, 1080)
+check("a clip inside the foreground window is left alone",
+      mg.clip_is_owned((100, 100, 900, 700), GAME_WIN, "game.exe", []))
+check("a clip left behind by a closed app is taken back",
+      not mg.clip_is_owned((100, 100, 900, 700), (2000, 0, 2500, 400),
+                           "game.exe", []))
+check("no foreground window means the clip is nobody's",
+      not mg.clip_is_owned((100, 100, 900, 700), None, "", []))
+check("the shell never vouches for a clip",
+      not mg.clip_is_owned((100, 100, 900, 700), GAME_WIN,
+                           "explorer.exe", ["explorer.exe"]))
+check("a clip larger than the window in front is not its doing",
+      not mg.clip_is_owned((0, 0, 3840, 2160), GAME_WIN, "game.exe", []))
+
 # Only one cursor clip exists on the system. A game confining the mouse to its
 # window owns that clip, and if its rectangle is already inside the region we
 # allow, the fence is satisfied without us touching it. Re-applying ours every
