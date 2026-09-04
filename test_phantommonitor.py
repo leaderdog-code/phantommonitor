@@ -475,6 +475,22 @@ for hwid, name, expected in [
     got = mg.looks_like_av_device(hwid, name)
     check("%s reads as %s" % (name, expected or "a display"), got == expected,
           str(got))
+# Only one cursor clip exists on the system. A game confining the mouse to its
+# window owns that clip, and if its rectangle is already inside the region we
+# allow, the fence is satisfied without us touching it. Re-applying ours every
+# sweep would widen it back out and let the cursor escape mid-game.
+ALLOWED = (-2560, 0, 3840, 2160)
+check("a game clip inside the allowed area is left alone",
+      mg.rect_within((100, 100, 2000, 1200), ALLOWED))
+check("a clip reaching onto a blocked display is not left alone",
+      not mg.rect_within((-4480, 0, -2560, 1080), ALLOWED))
+check("an unclipped cursor (whole virtual screen) is not left alone",
+      not mg.rect_within((-4480, 0, 3840, 2160), ALLOWED))
+check("a clip exactly matching the allowed area counts as within",
+      mg.rect_within(ALLOWED, ALLOWED))
+check("a clip overlapping one edge is not within",
+      not mg.rect_within((-3000, 0, 100, 100), ALLOWED))
+
 check("a blank display does not crash the guess",
       mg.looks_like_av_device("", "") is None)
 

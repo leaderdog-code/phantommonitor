@@ -208,6 +208,8 @@ user32.CallNextHookEx.restype = ctypes.c_long
 user32.CallNextHookEx.argtypes = [wt.HANDLE, ctypes.c_int, wt.WPARAM, wt.LPARAM]
 user32.GetAsyncKeyState.restype = ctypes.c_short
 user32.ClipCursor.argtypes = [ctypes.c_void_p]
+user32.GetClipCursor.restype = wt.BOOL
+user32.GetClipCursor.argtypes = [ctypes.c_void_p]
 advapi32 = ctypes.windll.advapi32
 advapi32.RegNotifyChangeKeyValue.argtypes = [wt.HKEY, wt.BOOL, wt.DWORD, wt.HANDLE, wt.BOOL]
 kernel32.CreateEventW.restype = wt.HANDLE
@@ -575,6 +577,12 @@ def topology_signature(monitors):
     return "|".join("%dx%d@%d,%d" % (m.rect[2] - m.rect[0], m.rect[3] - m.rect[1],
                                      m.rect[0], m.rect[1])
                     for m in sorted(monitors, key=lambda m: m.number))
+
+
+def rect_within(inner, outer):
+    """True if INNER sits entirely inside OUTER."""
+    return (inner[0] >= outer[0] and inner[1] >= outer[1]
+            and inner[2] <= outer[2] and inner[3] <= outer[3])
 
 
 def cursor_clip_rect(monitors, blocked):
@@ -1984,6 +1992,28 @@ class TrayApp:
                             "this layout needs more than one rectangle")
                 self.clip_warned = True
             return
+        # There is only ONE cursor clip on the system, and this runs on every
+        # sweep because Windows drops the clip whenever the foreground window
+        # changes. So check who owns it first.
+        #
+        # A game confining the mouse to its window sets a clip of its own. If
+        # that clip already sits inside the region we allow, it satisfies the
+        # fence by itself - the pointer cannot reach a blocked display from
+        # inside it. Overwriting it every two seconds would widen it back out
+        # and let their cursor escape mid-game, which is a far worse bug than
+        # the one being prevented.
+        current = wt.RECT()
+        if user32.GetClipCursor(ctypes.byref(current)):
+            cur = (current.left, current.top, current.right, current.bottom)
+            if cur == box:
+                self.cursor_clipped = True   # still ours, nothing to do
+                return
+            if rect_within(cur, box):
+                if self.cursor_clipped:
+                    log.info("another app is confining the pointer to %s; "
+                             "leaving its clip alone", cur)
+                self.cursor_clipped = False
+                return
         rect = wt.RECT(box[0], box[1], box[2], box[3])
         if user32.ClipCursor(ctypes.byref(rect)):
             if not self.cursor_clipped:
