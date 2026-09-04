@@ -523,22 +523,43 @@ check("turning the feature off stops it holding anything",
       mg.cursor_lock_rect(FS.rect, guard.monitors, [], "somegame.exe",
                           [], [], False, True) is None)
 
-# A full-screen app on an allowed display manages the pointer itself. Ours must
-# stand down, or alt-tabbing back into a game knocks the cursor out of its edge
-# - our clip lands just after the game re-confines the mouse, and last wins.
+# A screen with an app pinned to it is reserved, not banished. Fencing the
+# pointer out of it would leave a chat monitor nobody can answer on.
+BLOCKED_ALL = [m for m in guard.monitors if not m.primary]
+check("a blocked display with nothing pinned stays fenced",
+      len(mg.fenceable(BLOCKED_ALL, {})) == len(BLOCKED_ALL))
+check("a blocked display with an app pinned to it is not fenced",
+      mg.fenceable(BLOCKED_ALL, {"discord.exe": BLOCKED_ALL[0].hwid}) == 
+      BLOCKED_ALL[1:])
+check("pinning to some other display does not unfence this one",
+      len(mg.fenceable(BLOCKED_ALL, {"discord.exe": "NOSUCH"}))
+      == len(BLOCKED_ALL))
+check("no pins at all leaves every blocked display fenced",
+      len(mg.fenceable(BLOCKED_ALL, None)) == len(BLOCKED_ALL))
+
+# Naming every game is impossible with a Steam or Epic library, so a
+# full-screen app holds the pointer by default and the exceptions are named.
+FS = next(m for m in guard.monitors if m.primary)
+check("a full-screen app holds the pointer by default",
+      mg.cursor_lock_rect(FS.rect, guard.monitors, [], "somegame.exe",
+                          [], ["mstsc.exe"], True, True) == FS.rect)
+check("full-screen RDP is excluded, so the pointer stays free",
+      mg.cursor_lock_rect(FS.rect, guard.monitors, [], "mstsc.exe",
+                          [], ["mstsc.exe"], True, True) is None)
+check("an explicitly named app beats the exclusion list",
+      mg.cursor_lock_rect(FS.rect, guard.monitors, [], "mstsc.exe",
+                          ["mstsc.exe"], ["mstsc.exe"], True, True) == FS.rect)
+check("a windowed app never holds the pointer",
+      mg.cursor_lock_rect((100, 100, 900, 700), guard.monitors, [],
+                          "somegame.exe", [], [], True, True) is None)
+check("turning the feature off stops it holding anything",
+      mg.cursor_lock_rect(FS.rect, guard.monitors, [], "somegame.exe",
+                          [], [], False, True) is None)
+
 GAME_MON = next(m for m in guard.monitors if not m.primary)
-PRIMARY = next(m for m in guard.monitors if m.primary)
-check("a full-screen window on an allowed display owns the cursor",
-      mg.app_owns_cursor(PRIMARY.rect, guard.monitors, []))
-check("a windowed app does not own the cursor",
-      not mg.app_owns_cursor((100, 100, 900, 700), guard.monitors, []))
-check("a full-screen window on a BLOCKED display never owns the cursor",
-      not mg.app_owns_cursor(GAME_MON.rect, guard.monitors, [GAME_MON]))
-check("no foreground rect means the fence still applies",
-      not mg.app_owns_cursor(None, guard.monitors, []))
-check("a window off every display does not own the cursor",
-      not mg.app_owns_cursor((-32000, -32000, -31000, -31000),
-                             guard.monitors, []))
+check("a full-screen window on a BLOCKED display never holds the pointer",
+      mg.cursor_lock_rect(GAME_MON.rect, guard.monitors, [GAME_MON],
+                          "somegame.exe", [], [], True, True) is None)
 
 # Only one cursor clip exists on the system. A game confining the mouse to its
 # window owns that clip, and if its rectangle is already inside the region we
