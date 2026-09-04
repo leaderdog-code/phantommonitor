@@ -871,6 +871,28 @@ def covers_monitor(rect, mon, fraction=0.95):
     return mon_area > 0 and overlap_area(rect, mon) >= fraction * mon_area
 
 
+def app_owns_cursor(rect, monitors, blocked):
+    """True if a full-screen app should be left to manage the pointer itself.
+
+    There is one cursor clip on the system and the last caller wins. A game
+    confines the pointer to its window on focus-gain, and our foreground
+    handler fires just after - so we would overwrite it every time the player
+    alt-tabbed back in, and the cursor would slide out of the game edge.
+
+    A window blanketing a whole display is one the user is deliberately inside.
+    Stand down and let it own the cursor.
+
+    Never for a blocked display: a full-screen window sitting on the phantom is
+    exactly what this program exists to evict.
+    """
+    if not rect or not monitors:
+        return False
+    host = monitor_of_rect(rect, monitors, require_overlap=True)
+    if host is None or host in blocked:
+        return False
+    return covers_monitor(rect, host)
+
+
 KEYEVENTF_KEYUP = 0x0002
 VK_CANCEL = 0x03  # Break
 
@@ -1992,6 +2014,22 @@ class TrayApp:
                             "this layout needs more than one rectangle")
                 self.clip_warned = True
             return
+        # Stand aside for a full-screen app on a display we allow. It is
+        # managing the pointer itself, and since the last ClipCursor call wins
+        # and ours lands just after its focus-gain, imposing the fence here is
+        # what knocks the cursor out of a game edge on alt-tab back in.
+        try:
+            fg = win32gui.GetForegroundWindow()
+            fg_rect = win32gui.GetWindowRect(fg) if fg else None
+        except Exception:
+            fg_rect = None
+        if app_owns_cursor(fg_rect, self.guard.monitors, self.guard.blocked()):
+            if self.cursor_clipped:
+                log.info("full-screen app has the foreground; standing down "
+                         "the pointer fence so it can own the cursor")
+                self.cursor_clipped = False
+            return
+
         # There is only ONE cursor clip on the system, and this runs on every
         # sweep because Windows drops the clip whenever the foreground window
         # changes. So check who owns it first.

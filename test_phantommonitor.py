@@ -475,6 +475,23 @@ for hwid, name, expected in [
     got = mg.looks_like_av_device(hwid, name)
     check("%s reads as %s" % (name, expected or "a display"), got == expected,
           str(got))
+# A full-screen app on an allowed display manages the pointer itself. Ours must
+# stand down, or alt-tabbing back into a game knocks the cursor out of its edge
+# - our clip lands just after the game re-confines the mouse, and last wins.
+GAME_MON = next(m for m in guard.monitors if not m.primary)
+PRIMARY = next(m for m in guard.monitors if m.primary)
+check("a full-screen window on an allowed display owns the cursor",
+      mg.app_owns_cursor(PRIMARY.rect, guard.monitors, []))
+check("a windowed app does not own the cursor",
+      not mg.app_owns_cursor((100, 100, 900, 700), guard.monitors, []))
+check("a full-screen window on a BLOCKED display never owns the cursor",
+      not mg.app_owns_cursor(GAME_MON.rect, guard.monitors, [GAME_MON]))
+check("no foreground rect means the fence still applies",
+      not mg.app_owns_cursor(None, guard.monitors, []))
+check("a window off every display does not own the cursor",
+      not mg.app_owns_cursor((-32000, -32000, -31000, -31000),
+                             guard.monitors, []))
+
 # Only one cursor clip exists on the system. A game confining the mouse to its
 # window owns that clip, and if its rectangle is already inside the region we
 # allow, the fence is satisfied without us touching it. Re-applying ours every
