@@ -26,6 +26,68 @@ def save(path, cfg):
         json.dump(cfg, handle, indent=2)
 
 
+# Tk key names -> the names the config uses.
+KEYSYM_NAMES = {
+    "Left": "left", "Right": "right", "Up": "up", "Down": "down",
+    "Home": "home", "End": "end", "Prior": "pageup", "Next": "pagedown",
+    "space": "space", "Insert": "insert", "Delete": "delete",
+    "Escape": "esc", "Tab": "tab", "Pause": "pause", "Cancel": "break",
+}
+MODIFIER_KEYSYMS = ("Control_L", "Control_R", "Alt_L", "Alt_R", "Shift_L",
+                    "Shift_R", "Win_L", "Win_R", "Super_L", "Super_R")
+
+
+def held_modifiers():
+    """Read the modifier keys directly rather than from the Tk event.
+
+    Tk's event.state bits for Alt and the Windows key are inconsistent across
+    versions and layouts; asking Windows is unambiguous.
+    """
+    import win32api
+    import win32con
+    down = lambda vk: win32api.GetAsyncKeyState(vk) & 0x8000
+    mods = []
+    if down(win32con.VK_CONTROL):
+        mods.append("ctrl")
+    if down(win32con.VK_MENU):
+        mods.append("alt")
+    if down(win32con.VK_SHIFT):
+        mods.append("shift")
+    if down(win32con.VK_LWIN) or down(win32con.VK_RWIN):
+        mods.append("win")
+    return mods
+
+
+def capture_hotkey(event, var):
+    """Turn a real keystroke into a config string.
+
+    Only captures when a modifier is held, so ordinary typing and pasting still
+    work in the same box - press the combination to record it, or type it out if
+    you would rather.
+    """
+    if event.keysym in MODIFIER_KEYSYMS:
+        return "break"
+    if event.keysym in ("Delete", "BackSpace") and not held_modifiers():
+        var.set("")
+        return "break"
+
+    mods = held_modifiers()
+    if not mods or mods == ["shift"]:
+        return None  # plain typing - leave the entry alone
+
+    name = KEYSYM_NAMES.get(event.keysym)
+    if name is None:
+        if len(event.keysym) == 1 and event.keysym.isalnum():
+            name = event.keysym.lower()
+        elif event.keysym.startswith("F") and event.keysym[1:].isdigit():
+            name = event.keysym.lower()
+    if not name:
+        return "break"
+
+    var.set("+".join(mods + [name]))
+    return "break"
+
+
 def run(config_path, monitors):
     """monitors: list of (name, hwid, width, height, x, y, primary)."""
     cfg = load(config_path)
@@ -112,9 +174,12 @@ def run(config_path, monitors):
         ttk.Label(keys, text=text).grid(row=row, column=0, sticky="w", padx=10, pady=2)
         var = tk.StringVar(value=hotkeys.get(key, ""))
         entries[key] = var
-        ttk.Entry(keys, textvariable=var, width=22).grid(row=row, column=1, padx=10)
-    ttk.Label(keys, text="ctrl / alt / shift / win plus a key. Blank disables.\n"
-                         "Matched combos are swallowed, so avoid combos your games use.",
+        field = ttk.Entry(keys, textvariable=var, width=22)
+        field.grid(row=row, column=1, padx=10)
+        field.bind("<KeyPress>", lambda e, v=var: capture_hotkey(e, v))
+    ttk.Label(keys, text="Click a box and press the combination you want — no need to\n"
+                         "type it. Delete clears one. Typing still works if you prefer.\n"
+                         "Matched combos are swallowed, so avoid ones your games use.",
               foreground="#555").grid(row=len(rows), column=0, columnspan=2,
                                       sticky="w", padx=10, pady=(2, 8))
 
