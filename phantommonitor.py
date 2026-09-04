@@ -2210,8 +2210,8 @@ def ddc_power_state(mon):
                 arr[0].hPhysicalMonitor, 0xD6, None,
                 ctypes.byref(cur), ctypes.byref(mx))
             if not ok:
-                return ("not supported (usual behind a receiver, converter, "
-                    "switch or KVM)")
+                return ("not supported (most TVs never implement it; receivers "
+                    "and converters can also swallow it)")
             return names.get(cur.value, str(cur.value))
         finally:
             dxva2.DestroyPhysicalMonitors(count.value, arr)

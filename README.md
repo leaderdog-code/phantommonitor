@@ -341,10 +341,21 @@ disappears from Windows, it was the screen's standby, and its **quick-start or
 eco setting** controls it. If it persists, whatever is in the middle is holding
 it and no setting on the screen will change that.
 
-**DDC/CI does not survive conversion.** Receivers, converters, switches and KVMs
-do not pass the I2C command channel through, so the display cannot be asked
-whether it is on. `--diag` reports this per display. Where it says *not
-supported*, power state is undetectable and no software can work around it.
+**The display will not answer DDC/CI.** That is the channel that could be asked
+"are you switched on", and there are two reasons it goes quiet:
+
+- **Most TVs simply do not implement it.** It is a monitor feature — brightness
+  and input control from the PC — and TVs expect their own remote and CEC
+  instead. Computer monitors usually answer; televisions usually do not.
+- **Something in the path does not pass it on.** Receivers and some active
+  converters terminate the link and regenerate it rather than relaying I2C
+  commands.
+
+Note that EDID passing through proves nothing either way: EDID is a passive read
+over the same wires, and it works in plenty of setups where DDC/CI does not.
+
+`--diag` reports this per display. Where it says *not supported*, power state is
+undetectable and no software can work around it.
 
 So:
 
