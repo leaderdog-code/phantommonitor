@@ -153,6 +153,7 @@ WH_KEYBOARD_LL = 13
 WM_KEYDOWN, WM_SYSKEYDOWN = 0x0100, 0x0104
 WM_APP_HOTKEY = win32con.WM_APP + 1
 WM_APP_ICONS = win32con.WM_APP + 2
+WM_APP_SETTINGS_CLOSED = win32con.WM_APP + 3
 
 # Explorer records desktop icon positions here, and rewrites it shortly after
 # they move. Watching this is how icon changes are noticed: Explorer does not
@@ -1899,27 +1900,6 @@ class TrayApp:
             checked=self.cfg.get("block_cursor", False))
         sep()
 
-        win32gui.AppendMenu(menu, win32con.MF_STRING | win32con.MF_GRAYED, 0,
-                            "Block windows on:")
-        for mon in self.guard.monitors:
-            add("   " + mon.label(), self._make_block_toggle(mon.hwid),
-                checked=mon.device in blocked_now)
-        sep()
-
-        move_menu = win32gui.CreatePopupMenu()
-        specs = self.cfg.get("hotkeys") or {}
-        for mon in self.guard.monitors:
-            item_id = next_id[0]
-            next_id[0] += 1
-            if mon.device in blocked_now:
-                win32gui.AppendMenu(move_menu, win32con.MF_STRING | win32con.MF_GRAYED,
-                                    0, mon.label() + "   (blocked)")
-                continue
-            spec = specs.get("monitor_%d" % mon.number, "")
-            hint = ("\t" + spec) if spec else ""
-            win32gui.AppendMenu(move_menu, win32con.MF_STRING, item_id,
-                                mon.label() + hint)
-            self.actions[item_id] = self._make_move_action(mon.number)
         # Name the window it will act on, so there is no guessing about which
         # one the menu captured.
         if self.menu_target and is_manageable(self.menu_target, self.cfg):
@@ -1933,7 +1913,8 @@ class TrayApp:
         add("Start with Windows", self._toggle_autostart,
             checked=os.path.exists(STARTUP_VBS))
         editor = self.cfg.get("editor", "")
-        add("Edit hotkeys / settings", lambda: open_text_file(CONFIG_PATH, editor))
+        add("Settings...", self._open_settings)
+        add("Edit config file", lambda: open_text_file(CONFIG_PATH, editor))
         add("Reload settings", self._reload_config)
         add("Open config folder", lambda: os.startfile(APP_DIR))
         add("View log", lambda: open_text_file(LOG_PATH, editor))
@@ -1972,9 +1953,61 @@ class TrayApp:
             self.guard.sweep("config-change")
         return toggle
 
+    def _make_assign_action(self, hwid, slot):
+        """Point a hotkey slot at a display, by hardware id.
+
+        This is what makes the numbers mean something: the user decides which
+        screen is 1, 2, 3, and it stays that way through renumbering, adapter
+        swaps and anything else Windows does to its own ordering.
+        """
+        def assign():
+            targets = dict(self.cfg.get("hotkey_targets") or {})
+            # One display per slot, one slot per display.
+            targets = dict((k, v) for k, v in targets.items() if v != hwid)
+            targets[str(slot)] = hwid
+            self.cfg["hotkey_targets"] = targets
+            save_config(self.cfg)
+            self._rebuild_hotkeys()
+            log.info("hotkey slot %d now means %s", slot, hwid)
+        return assign
+
+    def _make_unassign_action(self, hwid):
+        def clear():
+            targets = dict(self.cfg.get("hotkey_targets") or {})
+            self.cfg["hotkey_targets"] = dict(
+                (k, v) for k, v in targets.items() if v != hwid)
+            save_config(self.cfg)
+            self._rebuild_hotkeys()
+            log.info("%s is no longer pinned to a hotkey slot", hwid)
+        return clear
+
     def _make_move_action(self, number):
         target = self.menu_target  # bind now, not when the item is clicked
         return lambda: self.guard.move_active_to(number, target, "tray menu")
+
+    def _open_settings(self):
+        """Run the settings window as a child process.
+
+        Not a thread: Tk owns an event loop and this process already runs a
+        Windows message pump, and a crash in the settings UI should not take
+        the guard down with it.
+        """
+        if getattr(sys, "frozen", False):
+            command = [sys.executable, "--settings"]
+        else:
+            command = [sys.executable, os.path.join(APP_DIR, "phantommonitor.py"),
+                       "--settings"]
+        try:
+            child = subprocess.Popen(command)
+        except OSError as exc:
+            log.error("could not open settings: %s", exc)
+            return
+
+        def wait_then_reload():
+            child.wait()
+            win32gui.PostMessage(self.hwnd, WM_APP_SETTINGS_CLOSED, 0, 0)
+
+        threading.Thread(target=wait_then_reload, daemon=True).start()
 
     def _reload_config(self):
         """Re-read config.json and re-arm hotkeys without restarting."""
@@ -2088,6 +2121,10 @@ class TrayApp:
 
         if msg == WM_APP_ICONS:  # Explorer rewrote the desktop icon layout
             self._icons_moved()
+            return 0
+
+        if msg == WM_APP_SETTINGS_CLOSED:
+            self._reload_config()
             return 0
 
         if msg == win32con.WM_TIMER:
@@ -2291,6 +2328,13 @@ def main():
 
     if "--diag" in args:
         print_diagnostics(cfg)
+        return 0
+
+    if "--settings" in args:
+        import settings_window
+        monitors = [(m.name, m.hwid, m.rect[2] - m.rect[0], m.rect[3] - m.rect[1],
+                     m.rect[0], m.rect[1], m.primary) for m in enum_monitors()]
+        settings_window.run(CONFIG_PATH, monitors)
         return 0
 
     if "--list" in args:
