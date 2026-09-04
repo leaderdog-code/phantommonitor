@@ -583,27 +583,18 @@ every monitor and reshuffles your windows and desktop icons.
 
 - Window position restore is **per session**, held in memory. It fixes the
   unplug/replug scramble; it does not survive a reboot.
-- Nothing can detect that a screen has been switched off while something keeps
-  serving its EDID. DDC/CI would answer, but most televisions never implement
-  it and receivers and converters often do not pass it on. A receiver typically
-  drops a cached EDID a few minutes after the screen goes dark and blocking
-  resumes then; an adapter or a TV's own quick-start standby may hold it
-  indefinitely, and then blocking is a tick in the settings.
-- **Receivers differ enormously**, and in a way that decides which rule works.
-  Both tested on a native HDMI port. A **Denon AVR** keeps its own EDID
-  identity whatever is behind it and drops to 800×600 a few minutes after the
-  screen goes dark, so the resolution is the signal. A **Yamaha HTR-4063**
-  passes the downstream EDID through, so the hardware id itself changes, and a
-  plain rule on the amp's own id is automatic. It also advertises 1920×1080
-  with nothing attached, so a size rule would never have caught it. Check
-  `--diag` with and without a screen behind your amp before assuming either.
-- An adapter in the path removes the question entirely: an active
-  DisplayPort-to-HDMI converter regenerates the link, so the card sees the
-  adapter rather than whatever is behind it, and nothing changes when a screen
-  goes off.
-- The timings quoted here — the four-minute hold in particular — come from one
-  machine. `--diag` output from other hardware is the most useful thing anyone
-  could send.
+- A screen switched off behind an amp is detected **late, not never**. The amp
+  serves its cached EDID for some minutes first, so there is a window where the
+  phantom is not yet blocked. It corrects itself.
+- Some kit is never detectable. An active DisplayPort-to-HDMI adapter
+  regenerates the link, so the card only ever sees the adapter; a TV's
+  quick-start standby can hold the link up indefinitely; and EDID in a
+  DDC-powered EEPROM reads even with the device unplugged from the mains. For
+  those, blocking is a tick in the settings rather than anything automatic.
+- **Receivers differ**, and which rule works depends on yours — see
+  [Block rules](#block-rules). Run `--diag` and check, rather than assuming.
+- Timings here come from one machine. `--diag` output from other hardware is
+  the most useful thing anyone could send.
 - An EDID hardware id identifies a monitor *model*, not an individual panel, so
   two identical monitors share one id. PhantomMonitor warns when it sees that.
 
