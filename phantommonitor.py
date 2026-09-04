@@ -127,6 +127,7 @@ TIMER_SWEEP = 1
 TIMER_SETTLE = 2  # re-sweeps while a display topology change settles
 TIMER_ICONS = 3   # debounced save after desktop icons stop moving
 TIMER_WINDOWS = 4  # debounced save after windows stop being dragged
+TIMER_VERIFY = 5   # later passes, for windows nudged after the settle expired
 
 MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, MOD_NOREPEAT = 1, 2, 4, 8, 0x4000
 HOTKEY_ID_BASE = 100  # +0 = rescue, +n = move active window to monitor n
@@ -1277,6 +1278,7 @@ class TrayApp:
         self.window_snapshot = {}   # {hwnd: placement} - the last known good state
         self.windows_frozen = False  # stop snapshotting while a change is underway
         self.last_signature = ""     # only restore when the layout actually changed
+        self.verify_left = 0         # remaining late-nudge checks after a restore
         self.hotkeys = resolve_hotkeys(cfg)  # {0: rescue, N: monitor N}
         self.settle_left = 0
         self.icon_active = 0
@@ -2032,6 +2034,12 @@ class TrayApp:
                 user32.KillTimer(self.hwnd, TIMER_ICONS)
                 if time.monotonic() >= self.icons_quiet_until:
                     self._snapshot_icons("icons moved")
+            elif wparam == TIMER_VERIFY:
+                if self._restore_windows("late nudge"):
+                    self._snapshot_windows("after late fix")
+                self.verify_left -= 1
+                if self.verify_left <= 0:
+                    user32.KillTimer(self.hwnd, TIMER_VERIFY)
             elif wparam == TIMER_WINDOWS:
                 user32.KillTimer(self.hwnd, TIMER_WINDOWS)
                 if time.monotonic() >= self.icons_quiet_until:
@@ -2065,6 +2073,15 @@ class TrayApp:
                         self.icons_quiet_until = time.monotonic() + 10
                         self.windows_frozen = False
                         self._snapshot_windows("after restore")
+                        # Windows and apps keep nudging windows for a while
+                        # after the settle expires - a maximized window
+                        # re-laying out, an app reacting to the resolution
+                        # change. Check again shortly. These passes only touch
+                        # windows that differ from the snapshot, and the
+                        # snapshot now tracks the user again, so anything they
+                        # move in the meantime is left alone.
+                        self.verify_left = 3
+                        user32.SetTimer(self.hwnd, TIMER_VERIFY, 2500, None)
             return 0
 
         if msg in (win32con.WM_DISPLAYCHANGE, win32con.WM_DEVICECHANGE):
