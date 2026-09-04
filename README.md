@@ -142,9 +142,30 @@ Then just run it:
 python phantommonitor.py
 ```
 
-Right-click the tray icon and tick the display you want blocked. Use
-`PhantomMonitor.vbs` to start it without a console window, and the tray menu's
-**Start with Windows** to have it launch at logon.
+Right-click the tray icon and choose **Settings**. Use `PhantomMonitor.vbs` to
+start it without a console window, and the tray menu's **Start with Windows** to
+have it launch at logon.
+
+## The settings window
+
+Everything is set here rather than buried in a menu.
+
+**Displays** lists each one by name, size, hardware id and position, with a tick
+to block it and a dropdown to give it a hotkey slot. Displays are listed in slot
+order, so the list reads in the order of the keys you press.
+
+**Behaviour** holds the toggles: the master switch, the pointer fence, window and
+icon restore, whether to ask full-screen apps to leave full-screen, and whether
+to catch hotkeys from apps that swallow them.
+
+**Hotkeys** are typed rather than recorded by pressing — deliberately. Capturing
+keystrokes means intercepting everything typed into the box, and ctrl+alt is
+AltGr, so it produces a symbol rather than the key you pressed. Dead keys,
+non-Latin layouts and IMEs lie behind that. A text field with an example is
+duller and works.
+
+The tray menu keeps only what is reached for in passing: rescue, the two guard
+toggles, moving the current window, and the file actions.
 
 ## Block rules
 
@@ -246,8 +267,9 @@ often private — tax documents, medical files, client names. It is in
 ## Configuration
 
 `config.json` sits next to the script. See `config.example.json` for every
-setting with explanations. Edit it from the tray (**Edit hotkeys / settings**)
-and apply without restarting (**Reload settings**).
+setting with explanations. Most of it is reachable from **Settings** in the tray
+menu; **Edit config file** opens the raw file, and **Reload settings** applies
+changes without restarting.
 
 A few worth knowing:
 
@@ -385,18 +407,25 @@ every monitor and reshuffles your windows and desktop icons.
 
 - Window position restore is **per session**, held in memory. It fixes the
   unplug/replug scramble; it does not survive a reboot.
-- Nothing can detect that a monitor has been physically switched off if the
-  receiver keeps serving its cached EDID. DDC/CI would answer, but receivers
-  generally don't pass the I2C channel through. A receiver typically drops the
-  cached EDID a few minutes after the screen goes dark, and blocking resumes
-  then.
+- Nothing can detect that a screen has been switched off while something keeps
+  serving its EDID. DDC/CI would answer, but most televisions never implement
+  it and receivers and converters often do not pass it on. A receiver typically
+  drops a cached EDID a few minutes after the screen goes dark and blocking
+  resumes then; an adapter or a TV's own quick-start standby may hold it
+  indefinitely, and then blocking is a tick in the settings.
+- **Everything here was tested on one machine.** The EDID timings, the
+  four-minute hold, the fallback resolutions - all of it comes from a single
+  Denon receiver, one adapter chain and one TV. Whether those numbers
+  generalise is genuinely unknown, so `--diag` output from other hardware is
+  the most useful thing anyone could send.
 - An EDID hardware id identifies a monitor *model*, not an individual panel, so
   two identical monitors share one id. PhantomMonitor warns when it sees that.
 
 ## How this was built
 
 Co-authored with Claude Opus 5 (Anthropic), driven and tested by me against a
-real Denon receiver and three displays. Every behaviour described above was
+real Denon receiver, a TV behind a DisplayPort adapter chain, and up to four
+displays at once. Every behaviour described above was
 verified on actual hardware rather than assumed — including the awkward parts,
 like how long a receiver holds a cached EDID after the screen goes dark, and
 which key form Remote Desktop actually accepts to leave full screen. The rough

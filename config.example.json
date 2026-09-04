@@ -2,6 +2,8 @@
   "_readme": "Copy to config.json, or just run PhantomMonitor and pick your display from the tray menu - it writes this file for you. Run 'python phantommonitor.py --list' to see the hardware id of each display.",
   "_blocked_help": "'ABC1234' always blocks that display. 'ABC1234@800x600' blocks it only at exactly that size. 'ABC1234@<1280x720' blocks it only while smaller than that - useful for an AV receiver, which advertises a small fallback EDID with nothing attached and a real resolution once a screen is plugged in, so the guard stands aside by itself.",
   "blocked_hwids": [],
+  "_parked_help": "Rules removed by unticking a display are kept here verbatim, so re-ticking restores the exact rule rather than a bare hardware id.",
+  "blocked_rules_parked": [],
   "enabled": true,
   "_hotkeys_help": "Any mix of ctrl/alt/shift/win plus a letter, digit, F-key or named key (left right up down home end pageup pagedown space insert delete esc tab pause break). Empty string disables one. Matched combos are SWALLOWED and never reach the focused app, so avoid combos your games or apps use.",
   "hotkeys": {
