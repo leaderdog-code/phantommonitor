@@ -812,11 +812,17 @@ def windowed_rect(dst, fraction):
     return dl + ((dr - dl) - width) // 2, dt + ((db - dt) - height) // 2, width, height
 
 
-def window_displaced(hwnd, placement, cfg):
+def window_displaced(hwnd, placement, cfg, monitors=None):
     """Has this window moved since `placement` was recorded?
 
     The whole basis of window restore: if a window still sits exactly where the
     snapshot says, the display change did not touch it and neither should we.
+
+    Pass `monitors` to catch maximized windows. A maximized window keeps the
+    same rcNormalPosition when Windows shunts it to another display, so
+    comparing placements alone reports it as untouched when it has in fact
+    moved screens - which is exactly the case a user notices, because their
+    full-screen window is suddenly on the wrong monitor.
     """
     try:
         if not win32gui.IsWindow(hwnd) or not is_manageable(hwnd, cfg):
@@ -824,7 +830,28 @@ def window_displaced(hwnd, placement, cfg):
         current = win32gui.GetWindowPlacement(hwnd)
     except Exception:
         return False
-    return not (current[1] == placement[1] and current[4] == placement[4])
+
+    if not (current[1] == placement[1] and current[4] == placement[4]):
+        return True
+
+    if monitors and current[1] == win32con.SW_SHOWMAXIMIZED:
+        origin = (0, 0)
+        for mon in monitors:
+            if mon.primary:
+                origin = (mon.work[0], mon.work[1])
+                break
+        normal = placement[4]
+        expected = (normal[0] + origin[0], normal[1] + origin[1],
+                    normal[2] + origin[0], normal[3] + origin[1])
+        try:
+            actual = win32gui.GetWindowRect(hwnd)
+        except Exception:
+            return False
+        want = monitor_of_rect(expected, monitors)
+        got = monitor_of_rect(actual, monitors)
+        if want is not None and got is not None and want.device != got.device:
+            return True
+    return False
 
 
 def pick_menu_target(last_focused, cfg, current=None):
@@ -2135,9 +2162,11 @@ class TrayApp:
 def ddc_power_state(mon):
     """Ask the monitor its power state over DDC/CI.
 
-    Receivers generally do not pass the I2C channel through, which is why a
-    screen switched off behind one cannot be detected. Worth reporting: if some
-    receiver does pass it, that changes what is possible.
+    Anything sitting between the graphics card and the panel tends to break
+    this - AV receivers, DisplayPort-to-HDMI converters, HDMI switches, KVMs -
+    because they do not pass the I2C channel through. That is why a screen
+    switched off behind one cannot be detected. Worth reporting if yours does
+    answer: it would change what is possible.
     """
     try:
         dxva2 = ctypes.windll.dxva2
@@ -2164,7 +2193,8 @@ def ddc_power_state(mon):
                 arr[0].hPhysicalMonitor, 0xD6, None,
                 ctypes.byref(cur), ctypes.byref(mx))
             if not ok:
-                return "not supported (typical behind a receiver)"
+                return ("not supported (usual behind a receiver, converter, "
+                    "switch or KVM)")
             return names.get(cur.value, str(cur.value))
         finally:
             dxva2.DestroyPhysicalMonitors(count.value, arr)

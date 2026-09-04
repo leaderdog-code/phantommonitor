@@ -38,9 +38,12 @@ disconnecting it kills the sound you plugged the amp in for.
 PhantomMonitor fixes it in software: it watches for windows arriving on a blocked
 display and evacuates them, typically in under 10ms, so you never see it happen.
 
-It is also useful for a TV you only sometimes use, a projector left plugged in,
-an HDMI switch or splitter, a capture card, or a KVM that presents itself as a
-monitor.
+The same thing happens with anything else that sits between the graphics card
+and a panel and holds the link up on its own: a **DisplayPort-to-HDMI
+converter**, an HDMI switch or splitter, a KVM, a capture card. Those keep
+reporting a display when the screen behind them is switched off, so Windows
+keeps putting windows on it. A TV you only sometimes use, or a projector left
+plugged in, behaves the same way.
 
 ## Reserving a monitor you actually use
 
