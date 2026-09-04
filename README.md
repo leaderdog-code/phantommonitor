@@ -249,9 +249,10 @@ once a second:
 - **Denon** — likewise held on, then fell back to 800×600 under its own
   `DON0015`
 
-The delay has not been timed precisely enough to publish a figure — the poller
-timestamps the drop, but not the moment the remote was pressed. Treat it as
-"minutes, not seconds", and measure your own before relying on it.
+The delay has not been instrumented — the poller timestamps the drop, but not
+the moment the remote was pressed. In use it feels like about a minute on the
+Yamaha tested here. Treat that as a rough impression rather than a measurement,
+and if it matters to you, time your own.
 
 ### Why this happens at all
 
