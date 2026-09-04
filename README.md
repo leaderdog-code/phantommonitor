@@ -53,7 +53,15 @@ plugged in, behaves the same way.
 ## Reserving a monitor you actually use
 
 Blocking is not only for phantom displays. It works on any display, so it also
-answers "keep windows off that screen, it has a job":
+answers "keep windows off that screen, it has a job".
+
+**This takes two settings, not one.** Blocking alone evacuates *everything* from
+a display, including the app you wanted there - which would make the screen
+useless rather than reserved. You block the display *and* pin the app that
+belongs on it, covered in the next section. Neither half does the job on its
+own.
+
+The setups this is for:
 
 - A **streamer's chat monitor** — a dialog box landing on it mid-stream is
   exactly the sort of thing you cannot undo live
@@ -70,6 +78,8 @@ Use a plain hardware id for this — `GSM7814`, not `GSM7814@<1280x720`. The
 resolution qualifier exists so a phantom display stands aside when a real screen
 appears behind it; a monitor you are deliberately reserving should stay blocked
 until you untick it.
+
+Now pin what belongs there, or you have simply made a screen you cannot use.
 
 ### Sending an app to a display and keeping it there
 
