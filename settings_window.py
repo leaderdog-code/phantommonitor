@@ -94,10 +94,24 @@ def unsafe_hotkey(spec):
 
 
 ZOOM_CHOICES = ("1x", "1.25x", "1.5x", "2x", "2.5x", "3x")
+ZOOM_FONTS = ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont",
+              "TkCaptionFont", "TkSmallCaptionFont", "TkIconFont",
+              "TkTooltipFont", "TkFixedFont")
 
 
-def apply_zoom(root, factor):
-    """Scale the whole UI by FACTOR.
+def font_baseline(root):
+    """The unscaled size of each named font, captured before any zoom."""
+    base = {}
+    for name in ZOOM_FONTS:
+        try:
+            base[name] = tkfont.nametofont(name, root=root).cget("size")
+        except tk.TclError:
+            continue
+    return base
+
+
+def apply_zoom(root, factor, base):
+    """Scale the whole UI to FACTOR times BASE, live.
 
     The app asks Windows for per-monitor-v2 DPI awareness, which means Windows
     stops scaling it and hands over real pixels. That is right for measuring
@@ -106,27 +120,30 @@ def apply_zoom(root, factor):
     1080p screen. Windows own scaling cannot be borrowed back per-window, so
     the window scales itself.
 
-    Tk sizes most widgets to their text, so scaling the named fonts carries
-    nearly all of the layout with it.
+    Always computed from BASE rather than from the current size, so it can be
+    called repeatedly as the user tries sizes. Scaling what is already scaled
+    compounds, and two turns of a 2x knob is 4x.
+
+    Named fonts are shared, so reconfiguring them relayouts every widget that
+    uses one - which is why this takes effect immediately rather than needing
+    the window reopened. Fixed padding does not scale, which is fine; it just
+    gets relatively tighter as the text grows.
+
+    Deliberately NOT touching "tk scaling": that changes how many pixels a
+    point maps to, and these fonts are sized in points, so doing both
+    multiplies the two together. Font size alone is linear.
     """
-    if abs(factor - 1.0) < 0.01:
-        return
-    try:
-        root.tk.call("tk", "scaling", root.tk.call("tk", "scaling") * factor)
-    except tk.TclError:
-        pass
-    for name in ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont",
-                 "TkCaptionFont", "TkSmallCaptionFont", "TkIconFont",
-                 "TkTooltipFont", "TkFixedFont"):
+    for name, size in base.items():
         try:
             f = tkfont.nametofont(name, root=root)
         except tk.TclError:
             continue
-        size = f.cget("size")
         # Negative sizes are pixels, positive are points. Keep the sign, or a
         # pixel-sized font silently becomes a much larger point-sized one.
         scaled = int(round(abs(size) * factor)) or 1
         f.configure(size=-scaled if size < 0 else scaled)
+    # The window is fixed-size, so it will not refit on its own.
+    root.geometry("")
 
 
 def zoom_factor(cfg):
@@ -147,7 +164,8 @@ def run(config_path, monitors, absent=()):
     cfg = load(config_path)
     root = tk.Tk()
     root.title("Phantom Monitor settings")
-    apply_zoom(root, zoom_factor(cfg))
+    zoom_base = font_baseline(root)
+    apply_zoom(root, zoom_factor(cfg), zoom_base)
     root.resizable(False, False)
     try:
         root.iconbitmap(os.path.join(os.path.dirname(config_path), "app.ico"))
@@ -157,9 +175,29 @@ def run(config_path, monitors, absent=()):
     pad = {"padx": 10, "pady": 4}
     slot_count = max(4, len(monitors))
 
+    # --- zoom ---------------------------------------------------------------
+    # First thing in the window, because the reason to want it is that the
+    # window is too small to read - so it must not be somewhere you have to
+    # squint your way down to.
+    zoom_box = ttk.Frame(root)
+    zoom_box.grid(row=0, column=0, sticky="w", padx=10, pady=(8, 0))
+    ttk.Label(zoom_box, text="Window zoom").grid(row=0, column=0, padx=(0, 6))
+    current_zoom = zoom_factor(cfg)
+    zoom_var = tk.StringVar(
+        value=next((c for c in ZOOM_CHOICES
+                    if abs(float(c[:-1]) - current_zoom) < 0.01), "1x"))
+    zoom_pick = ttk.Combobox(zoom_box, textvariable=zoom_var, width=6,
+                             state="readonly", values=list(ZOOM_CHOICES))
+    zoom_pick.grid(row=0, column=1)
+    zoom_pick.bind("<<ComboboxSelected>>",
+                   lambda _e: apply_zoom(root, float(zoom_var.get()[:-1]),
+                                         zoom_base))
+    ttk.Label(zoom_box, text="(saved with your settings)",
+              foreground="#555").grid(row=0, column=2, padx=(8, 0))
+
     # --- displays -----------------------------------------------------------
     box = ttk.LabelFrame(root, text="Displays")
-    box.grid(row=0, column=0, sticky="ew", **pad)
+    box.grid(row=1, column=0, sticky="ew", **pad)
 
     ttk.Label(box, text="Block windows\nand pointer", justify="center").grid(
         row=0, column=1, padx=8, pady=(6, 2))
@@ -234,7 +272,7 @@ def run(config_path, monitors, absent=()):
     absent_vars = {}
     if absent:
         seen = ttk.LabelFrame(root, text="Seen before, not connected now")
-        seen.grid(row=1, column=0, sticky="ew", **pad)
+        seen.grid(row=2, column=0, sticky="ew", **pad)
         for row, (hwid, name) in enumerate(absent):
             hint = looks_like_av_device(hwid, name, declared)
             label = "%s   [%s]%s" % (name, hwid,
@@ -253,7 +291,7 @@ def run(config_path, monitors, absent=()):
 
     # --- behaviour ----------------------------------------------------------
     opts = ttk.LabelFrame(root, text="Behaviour")
-    opts.grid(row=2, column=0, sticky="ew", **pad)
+    opts.grid(row=3, column=0, sticky="ew", **pad)
 
     toggles = [
         ("enabled", "Keep windows off blocked displays  (master switch)"),
@@ -279,7 +317,7 @@ def run(config_path, monitors, absent=()):
     # works. It is also validated on Save rather than as you type, so a stray
     # keystroke cannot quietly bind something.
     keys = ttk.LabelFrame(root, text="Hotkeys")
-    keys.grid(row=3, column=0, sticky="ew", **pad)
+    keys.grid(row=4, column=0, sticky="ew", **pad)
     warning = tk.StringVar(value="")
 
     hotkeys = dict(cfg.get("hotkeys") or {})
@@ -367,23 +405,8 @@ def run(config_path, monitors, absent=()):
         root.destroy()
 
     buttons = ttk.Frame(root)
-    buttons.grid(row=4, column=0, sticky="ew", padx=10, pady=(4, 12))
+    buttons.grid(row=5, column=0, sticky="ew", padx=10, pady=(4, 12))
     buttons.columnconfigure(0, weight=1)
-
-    # Zoom lives here rather than in a menu because the reason to reach
-    # for it is that the window is too small to read comfortably, and
-    # this is the one row everybody looks at.
-    zoom_box = ttk.Frame(buttons)
-    zoom_box.grid(row=0, column=0, sticky="w")
-    ttk.Label(zoom_box, text="Window zoom").grid(row=0, column=0, padx=(0, 6))
-    current_zoom = zoom_factor(cfg)
-    zoom_var = tk.StringVar(
-        value=next((c for c in ZOOM_CHOICES
-                    if abs(float(c[:-1]) - current_zoom) < 0.01), "1x"))
-    ttk.Combobox(zoom_box, textvariable=zoom_var, width=6, state="readonly",
-                 values=list(ZOOM_CHOICES)).grid(row=0, column=1)
-    ttk.Label(zoom_box, text="(applies next time this window opens)",
-              foreground="#555").grid(row=0, column=2, padx=(8, 0))
     ttk.Button(buttons, text="Cancel", command=root.destroy).grid(
         row=0, column=1, padx=4)
     ttk.Button(buttons, text="Save", command=apply_and_close).grid(
