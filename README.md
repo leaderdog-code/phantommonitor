@@ -252,8 +252,9 @@ see no change at all and conclude, wrongly, that detection is impossible. Give
 it five minutes.
 
 The timer runs in one direction only. Switching a screen **on** is picked up
-immediately - hot-plug detect fires and the amp reads the real EDID at once, so
-blocking releases straight away and the display is yours. It is only the
+within seconds - hot-plug detect fires, the link renegotiates in a burst of
+modesets that blanks every monitor a few times, and the real EDID is there. So
+blocking releases almost at once and the display is yours. It is only the
 **off** direction that waits, because nothing fires at all; the amp simply ages
 out its cache.
 
