@@ -46,7 +46,7 @@ ICON_LAYOUT_PATH = os.path.join(APP_DIR, "icon_layouts.json")
 PROJECT_URL = "https://github.com/leaderdog-code/phantommonitor"
 RELEASES_URL = PROJECT_URL + "/releases"
 LATEST_API = "https://api.github.com/repos/leaderdog-code/phantommonitor/releases/latest"
-APP_VERSION = "1.0.0"   # keep in step with AppVersion in build/installer.iss
+APP_VERSION = "1.1.0"   # keep in step with AppVersion in build/installer.iss
 STARTUP_VBS = os.path.join(
     os.environ.get("APPDATA", ""),
     "Microsoft", "Windows", "Start Menu", "Programs", "Startup",

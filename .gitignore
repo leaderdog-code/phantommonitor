@@ -22,3 +22,6 @@ config.json.*
 build/dist/
 build/work/
 build/*.spec
+
+# Throwaway diagnostics with this machine's hardware ids baked in
+watch_amp.py
