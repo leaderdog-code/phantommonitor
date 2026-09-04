@@ -224,6 +224,13 @@ with it off. If the reported resolution changes, the qualified rule will work.
 If it does not, nothing in software can detect it and a tick is the honest
 answer.
 
+Expect the tick more often than not. Graphics cards commonly ship with a single
+HDMI port and three DisplayPorts, so anyone running an amp *and* a TV is on an
+adapter for at least one of them — and an active adapter terminates the link and
+regenerates it, so the card only ever sees the adapter. Automatic detection
+tends to work for whatever occupies the one native HDMI port, and not for the
+rest.
+
 Use `<1280x720` rather than an exact size: fallback EDIDs come in 640×480,
 800×600 and 1024×768. The comparison is by **area**, which is the only version
 that gets both ends right — comparing both dimensions would miss 1024×768, which
