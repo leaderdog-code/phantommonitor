@@ -42,6 +42,27 @@ It is also useful for a TV you only sometimes use, a projector left plugged in,
 an HDMI switch or splitter, a capture card, or a KVM that presents itself as a
 monitor.
 
+## Reserving a monitor you actually use
+
+Blocking is not only for phantom displays. It works on any display, so it also
+answers "keep windows off that screen, it has a job":
+
+- A **streamer's chat monitor** — a dialog box landing on it mid-stream is
+  exactly the sort of thing you cannot undo live
+- A **dashboard or monitoring screen** that should show one thing and stay
+  showing it
+- A **TV playing something**, where a notification window is an interruption
+- A **vertical monitor** given over to chat, docs or a terminal
+- A **capture or preview display** feeding something else
+
+The mouse fence matters here too: a cursor wandering onto a screen being
+captured is visible to everyone watching.
+
+Use a plain hardware id for this — `GSM7814`, not `GSM7814@<1280x720`. The
+resolution qualifier exists so a phantom display stands aside when a real screen
+appears behind it; a monitor you are deliberately reserving should stay blocked
+until you untick it.
+
 **Keywords, so people with this problem can find it:** AV receiver phantom
 monitor, AVR ghost display, HDMI audio creates fake monitor, windows opening on
 invisible monitor, Denon / Yamaha / Onkyo / Marantz second display, soundbar
