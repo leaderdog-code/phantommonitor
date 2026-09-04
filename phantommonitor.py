@@ -635,11 +635,13 @@ def monitor_matches_block(mon, spec):
     width = mon.rect[2] - mon.rect[0]
     height = mon.rect[3] - mon.rect[1]
     if smaller:
-        # Either dimension being short is enough. Fallback EDIDs come in
-        # 640x480, 800x600 and 1024x768, and that last one is TALLER than 720 -
-        # requiring both to be small would let it through unblocked. Every real
-        # TV clears this: 1280x720, 1366x768, 1920x1080, 4K.
-        return width < size[0] or height < size[1]
+        # Compare AREA, not dimensions. Requiring both to be smaller would miss
+        # a 1024x768 fallback, which is taller than 720; requiring either would
+        # falsely catch a monitor turned on its side, where a 1080x1920 portrait
+        # panel is narrower than 1280. Area is right for both: every fallback
+        # EDID is under 1280x720 worth of pixels and every real display, rotated
+        # or not, is over it.
+        return width * height < size[0] * size[1]
     return (width, height) == size
 
 

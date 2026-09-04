@@ -303,6 +303,11 @@ for w, h, should_block, what in [
     (1366, 768, False, "real 768p TV"),
     (1920, 1080, False, "real 1080p TV"),
     (3840, 2160, False, "real 4K TV"),
+    # A monitor turned on its side for chat is narrower than 1280 but is a
+    # perfectly real display - comparing dimensions rather than area blocked it.
+    (1080, 1920, False, "1080p monitor rotated to portrait"),
+    (1440, 2560, False, "1440p monitor rotated to portrait"),
+    (1200, 1920, False, "1200p monitor rotated to portrait"),
 ]:
     got = mg.monitor_matches_block(FakeMon(w, h), "DON0015@<1280x720")
     check(("blocks " if should_block else "allows ") + what, got == should_block)

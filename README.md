@@ -200,7 +200,7 @@ toggles, moving the current window, and the file actions.
 |------|---------|
 | `DON0015` | Always block this display |
 | `DON0015@800x600` | Block only at exactly that size |
-| `DON0015@<1280x720` | Block only while **either** dimension is smaller |
+| `DON0015@<1280x720` | Block only while it has **fewer pixels** than that |
 
 The `<` form exists for "I might plug a real screen in later". An AV receiver
 with nothing attached advertises a small fallback EDID — that tiny resolution
@@ -210,8 +210,11 @@ matching and PhantomMonitor stands aside on its own. Unplug it and blocking
 resumes. No clicking.
 
 Use `<1280x720` rather than an exact size: fallback EDIDs come in 640×480,
-800×600 and 1024×768, and that last one is *taller* than 720 — hence "either
-dimension". Every real TV clears the threshold.
+800×600 and 1024×768. The comparison is by **area**, which is the only version
+that gets both ends right — comparing both dimensions would miss 1024×768, which
+is taller than 720, and comparing either would falsely catch a monitor turned on
+its side, where a 1080×1920 portrait panel is narrower than 1280. Every fallback
+EDID is under that many pixels; every real display, rotated or not, is over it.
 
 PhantomMonitor refuses to block every display at once, since there would be
 nowhere to evacuate to.
