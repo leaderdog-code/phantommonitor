@@ -121,6 +121,7 @@ DEFAULT_CONFIG = {
     # this basis. Worth reporting so the built-in list catches up.
     "av_devices": [],
     "not_av_devices": [],
+    "cursor_lock_apps": [],
     "settings_zoom": 1.0,
     "app_displays": {},
     "app_positions": {},
@@ -869,6 +870,27 @@ def covers_monitor(rect, mon, fraction=0.95):
     """True if the rect blankets essentially all of the monitor, i.e. full-screen."""
     mon_area = (mon.rect[2] - mon.rect[0]) * (mon.rect[3] - mon.rect[1])
     return mon_area > 0 and overlap_area(rect, mon) >= fraction * mon_area
+
+
+def cursor_lock_rect(rect, monitors, blocked, app, lock_apps):
+    """The display to confine the pointer to for a full-screen app, or None.
+
+    Two full-screen apps can want opposite things, so this cannot be one rule.
+    A game wants the pointer held inside it and wants that back the instant you
+    alt-tab in, having gone to check a map or answer a message. A full-screen
+    RDP session on one monitor wants no such thing - being locked into it would
+    strand the pointer away from every other screen.
+
+    So confinement is opt-in per executable. Anything not listed is left alone.
+    """
+    if not app or not lock_apps or not rect or not monitors:
+        return None
+    if app.lower() not in set(a.strip().lower() for a in lock_apps if a):
+        return None
+    host = monitor_of_rect(rect, monitors, require_overlap=True)
+    if host is None or host in blocked or not covers_monitor(rect, host):
+        return None
+    return host.rect
 
 
 def app_owns_cursor(rect, monitors, blocked):
@@ -2021,8 +2043,27 @@ class TrayApp:
         try:
             fg = win32gui.GetForegroundWindow()
             fg_rect = win32gui.GetWindowRect(fg) if fg else None
+            fg_app = process_name(fg) if fg else ""
         except Exception:
-            fg_rect = None
+            fg_rect, fg_app = None, ""
+        # Listed apps get the pointer actively held inside them, re-applied on
+        # every sweep - which is what makes it come back after an alt-tab out.
+        lock = cursor_lock_rect(fg_rect, self.guard.monitors,
+                                self.guard.blocked(), fg_app,
+                                self.cfg.get("cursor_lock_apps"))
+        if lock is not None:
+            held = wt.RECT(lock[0], lock[1], lock[2], lock[3])
+            if user32.ClipCursor(ctypes.byref(held)):
+                if not self.cursor_locked_app:
+                    log.info("holding the pointer inside %s on %s",
+                             fg_app, lock)
+                self.cursor_locked_app = True
+            self.cursor_clipped = False
+            return
+        if self.cursor_locked_app:
+            log.info("released the pointer from %s", self.cursor_locked_app)
+            self.cursor_locked_app = False
+
         if app_owns_cursor(fg_rect, self.guard.monitors, self.guard.blocked()):
             if self.cursor_clipped:
                 log.info("full-screen app has the foreground; standing down "
@@ -2530,36 +2571,43 @@ class TrayApp:
                     user32.KillTimer(self.hwnd, TIMER_SETTLE)
                     sig = topology_signature(self.guard.monitors)
                     if sig == self.last_signature:
-                        # A display event that left the layout identical - a
-                        # link renegotiating, a monitor waking. Nothing was
-                        # scrambled, so restoring here would not put anything
-                        # back; it would only undo what the user has done since
-                        # the last snapshot, yanking windows while they work.
-                        log.info("display event with no layout change; "
-                                 "nothing to restore")
-                        self.windows_frozen = False
+                        # The layout ended up where it started. That does
+                        # NOT mean nothing was scrambled: a game taking
+                        # exclusive full screen flips the display config and
+                        # flips it straight back, and Windows sweeps every
+                        # window off the other monitors onto the primary in
+                        # between. By the time the settle expires the
+                        # signature matches again, so judging by signature
+                        # missed precisely the case people most need fixed.
+                        #
+                        # Judge by the windows instead. The restore only
+                        # touches windows whose placement differs from the
+                        # snapshot frozen when the event began, so a display
+                        # event that really did move nothing costs a no-op.
+                        log.info("display event with no net layout change; "
+                                 "checking for displaced windows")
                     else:
                         log.info("layout changed; restoring")
                         self.last_signature = sig
-                        # Windows and Explorer have finished shuffling by now.
-                        self._restore_windows()
-                        self._find_icon_listview()  # it may have been recreated
-                        self._restore_icons()
-                        # Our own restore moves icons, which fires the same
-                        # events; stay quiet briefly so it does not re-save
-                        # what it just did.
-                        self.icons_quiet_until = time.monotonic() + 10
-                        self.windows_frozen = False
-                        self._snapshot_windows("after restore")
-                        # Windows and apps keep nudging windows for a while
-                        # after the settle expires - a maximized window
-                        # re-laying out, an app reacting to the resolution
-                        # change. Check again shortly. These passes only touch
-                        # windows that differ from the snapshot, and the
-                        # snapshot now tracks the user again, so anything they
-                        # move in the meantime is left alone.
-                        self.verify_left = 3
-                        user32.SetTimer(self.hwnd, TIMER_VERIFY, 2500, None)
+                    # Windows and Explorer have finished shuffling by now.
+                    self._restore_windows()
+                    self._find_icon_listview()  # it may have been recreated
+                    self._restore_icons()
+                    # Our own restore moves icons, which fires the same
+                    # events; stay quiet briefly so it does not re-save
+                    # what it just did.
+                    self.icons_quiet_until = time.monotonic() + 10
+                    self.windows_frozen = False
+                    self._snapshot_windows("after restore")
+                    # Windows and apps keep nudging windows for a while
+                    # after the settle expires - a maximized window
+                    # re-laying out, an app reacting to the resolution
+                    # change. Check again shortly. These passes only touch
+                    # windows that differ from the snapshot, and the
+                    # snapshot now tracks the user again, so anything they
+                    # move in the meantime is left alone.
+                    self.verify_left = 3
+                    user32.SetTimer(self.hwnd, TIMER_VERIFY, 2500, None)
             return 0
 
         if msg in (win32con.WM_DISPLAYCHANGE, win32con.WM_DEVICECHANGE):
