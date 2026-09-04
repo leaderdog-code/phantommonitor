@@ -72,6 +72,27 @@ resolution qualifier exists so a phantom display stands aside when a real screen
 appears behind it; a monitor you are deliberately reserving should stay blocked
 until you untick it.
 
+### Sending an app to a display and keeping it there
+
+Blocking on its own would evacuate *everything*, including the app you wanted on
+that screen. So name it:
+
+```json
+"app_displays": { "discord.exe": "GSM7814", "obs64.exe": "GSM7814" }
+```
+
+Those apps open on that display and are never evacuated from it, even when it is
+blocked. Everything else is still kept off. That is the chat-monitor or
+dashboard setup: one screen that only ever shows the thing it is for.
+
+Placement happens **when a window opens**, not continuously. Drag it somewhere
+else afterwards and it stays where you put it — the rule decides where things
+start, it does not police them. If the assigned display is not attached, the
+window opens wherever Windows puts it and goes to its display next time.
+
+One caveat: the pointer fence is all-or-nothing rather than per-display, so if
+you need to click on that screen, leave `block_cursor` off.
+
 **Keywords, so people with this problem can find it:** AV receiver phantom
 monitor, AVR ghost display, HDMI audio creates fake monitor, windows opening on
 invisible monitor, Denon / Yamaha / Onkyo / Marantz second display, soundbar

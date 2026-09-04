@@ -423,6 +423,29 @@ check("a tag with rubbish in it does not crash",
       mg.version_tuple("v1.2-beta3") == (1, 23) or True,
       str(mg.version_tuple("v1.2-beta3")))
 
+# 23 - an app pinned to a display is never evacuated from it, which is what
+#      makes a dedicated chat or dashboard screen possible at all.
+import os
+me = os.path.basename(sys.executable).lower()
+cfg["blocked_hwids"] = ["DON0015"]
+cfg["app_displays"] = {me: denon.hwid}
+park_on_denon()
+check("a pinned app is left on its own display",
+      guard.sweep("test") == 0 and where(hwnd).hwid == "DON0015",
+      where(hwnd).name)
+check("the display it is pinned to is found",
+      guard.assigned_display(hwnd) is denon)
+
+# Pinned elsewhere, it is evacuated like anything else.
+cfg["app_displays"] = {me: "GSM5BBF"}
+park_on_denon()
+check("an app pinned elsewhere is still evacuated",
+      guard.sweep("test") >= 1 and where(hwnd).hwid != "DON0015")
+
+cfg["app_displays"] = {}
+check("no pin means no assigned display",
+      guard.assigned_display(hwnd) is None)
+
 root.destroy()
 print()
 failed = [r for r in results if r[0] == FAIL]

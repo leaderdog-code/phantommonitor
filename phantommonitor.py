@@ -112,6 +112,12 @@ DEFAULT_CONFIG = {
     # Where "Support this project" points. Empty hides the menu item entirely -
     # nobody should have a donation link nagging them from a tray menu they did
     # not ask for one in.
+    # Send named apps to a display and remember where they sat there, e.g.
+    # {"discord.exe": "GSM7814"}. Those apps open on that display and are never
+    # evacuated from it, even when it is blocked - which is what makes a
+    # dedicated chat or dashboard screen possible.
+    "app_displays": {},
+    "app_positions": {},
     "support_url": "",
     # Off by default. Checking asks GitHub for the latest release, which means
     # contacting a server, and a tray utility should not do that unasked.
@@ -1208,6 +1214,14 @@ class Guard:
         # require_overlap: a window touching no monitor at all is normally
         # parked off-screen on purpose - apps hide helper windows out there and
         # dragging them into view breaks things.
+        assigned = self.assigned_display(hwnd)
+        if assigned is not None:
+            where = monitor_of_rect(rect, self.monitors, require_overlap=True)
+            if where is not None and where.device == assigned.device:
+                # Pinned there on purpose. Blocking keeps everything else off,
+                # which is the whole point of a dedicated screen.
+                return False
+
         here = monitor_of_rect(rect, self.monitors, require_overlap=True)
 
         if here is None:
@@ -1245,6 +1259,74 @@ class Guard:
         if moved:
             log.info("%s rescued %d window(s)", reason, moved)
         return moved
+
+    def assigned_display(self, hwnd):
+        """The display this window's app is pinned to, if it is attached."""
+        wanted = (self.cfg.get("app_displays") or {}).get(process_name(hwnd))
+        return self.by_hwid(wanted) if wanted else None
+
+    def remember_app_position(self, hwnd):
+        """Note where a pinned app was left, so it opens there next time.
+
+        Stored in screen coordinates, like icon layouts, so the position stays
+        meaningful when the desktop origin moves.
+        """
+        mon = self.assigned_display(hwnd)
+        if mon is None:
+            return False
+        try:
+            if not is_manageable(hwnd, self.cfg):
+                return False
+            rect = win32gui.GetWindowRect(hwnd)
+        except Exception:
+            return False
+        here = monitor_of_rect(rect, self.monitors, require_overlap=True)
+        if here is None or here.device != mon.device:
+            return False  # only remember a position on its own display
+        positions = dict(self.cfg.get("app_positions") or {})
+        positions[process_name(hwnd)] = list(rect)
+        self.cfg["app_positions"] = positions
+        save_config(self.cfg)
+        log.info("remembered where %s sits on %s", process_name(hwnd), mon.name)
+        return True
+
+    def place_assigned(self, hwnd):
+        """Put a newly opened window on its assigned display.
+
+        Only on opening. After that the user is in charge - a rule decides where
+        something starts, it does not follow it around.
+        """
+        mon = self.assigned_display(hwnd)
+        if mon is None or not is_manageable(hwnd, self.cfg):
+            return False
+        try:
+            rect = win32gui.GetWindowRect(hwnd)
+        except Exception:
+            return False
+        here = monitor_of_rect(rect, self.monitors, require_overlap=True)
+        if here is not None and here.device == mon.device:
+            return False  # already where it belongs
+
+        saved = (self.cfg.get("app_positions") or {}).get(process_name(hwnd))
+        if saved and len(saved) == 4:
+            wanted = tuple(saved)
+            if monitor_of_rect(wanted, self.monitors, require_overlap=True) is mon:
+                x, y = wanted[0], wanted[1]
+                width, height = wanted[2] - wanted[0], wanted[3] - wanted[1]
+            else:
+                saved = None
+        if not saved:
+            x, y, width, height = centred_rect(mon, rect)
+
+        try:
+            win32gui.SetWindowPos(hwnd, 0, x, y, width, height,
+                                  win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+        except Exception as exc:
+            log.debug("could not place %s: %s", process_name(hwnd), exc)
+            return False
+        log.info("opened %r on %s (its assigned display)",
+                 title_of(hwnd)[:50], mon.name)
+        return True
 
     def move_active_to(self, number, hwnd=None, reason="hotkey"):
         """Move a window to a monitor by number.
@@ -1596,6 +1678,7 @@ class TrayApp:
             if event == EVENT_SYSTEM_MOVESIZEEND:
                 self.guard.dragging = False
                 self.guard.check_window(hwnd, "drag-end")
+                self.guard.remember_app_position(hwnd)
                 self._windows_moved()
                 return
             if event == EVENT_OBJECT_LOCATIONCHANGE:
@@ -1613,6 +1696,10 @@ class TrayApp:
                 # produce a MOVESIZEEND the way a mouse drag does.
                 self._windows_moved()
                 return
+            if event == EVENT_OBJECT_SHOW:
+                # A rule decides where a window starts, not where it stays.
+                self.guard.place_assigned(hwnd)
+
             if event == EVENT_SYSTEM_FOREGROUND:
                 if is_manageable(hwnd, self.cfg):
                     # Remember it while we still can - the tray menu needs this.

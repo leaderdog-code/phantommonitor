@@ -4,6 +4,9 @@
   "blocked_hwids": [],
   "_parked_help": "Rules removed by unticking a display are kept here verbatim, so re-ticking restores the exact rule rather than a bare hardware id.",
   "blocked_rules_parked": [],
+  "_app_displays_help": "Send named apps to a display and keep them there, e.g. {\"discord.exe\": \"GSM7814\"}. They open on that display, reopen where you last left them, and are never evacuated from it even when it is blocked - so one screen can be dedicated to them while everything else is kept off. Placement happens when a window opens; drag it elsewhere afterwards and it stays put.",
+  "app_displays": {},
+  "app_positions": {},
   "enabled": true,
   "_hotkeys_help": "Any mix of ctrl/alt/shift/win plus a letter, digit, F-key or named key (left right up down home end pageup pagedown space insert delete esc tab pause break). Empty string disables one. Matched combos are SWALLOWED and never reach the focused app, so avoid combos your games or apps use.",
   "hotkeys": {
