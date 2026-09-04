@@ -202,12 +202,25 @@ toggles, moving the current window, and the file actions.
 | `DON0015@800x600` | Block only at exactly that size |
 | `DON0015@<1280x720` | Block only while it has **fewer pixels** than that |
 
-The `<` form exists for "I might plug a real screen in later". An AV receiver
-with nothing attached advertises a small fallback EDID — that tiny resolution
-*is* the "no display here" signal. Plug a real screen in and the receiver either
-passes its EDID through or reports a real resolution; either way the rule stops
-matching and PhantomMonitor stands aside on its own. Unplug it and blocking
-resumes. No clicking.
+The `<` form exists for "I might plug a real screen in later" — **but only some
+receivers make it possible**, so check yours before relying on it.
+
+A receiver that drops to a small fallback EDID when nothing is awake behind it
+gives you that resolution change as a signal: the rule matches while it is a
+phantom and stops matching when a real screen appears, so blocking turns itself
+on and off with no clicking. A Denon tested here behaves that way, falling back
+to 800×600 a few minutes after a screen goes dark.
+
+A receiver that reports the same EDID regardless gives you no signal at all. A
+Yamaha tested here does this — the resolution does not shrink when the screen is
+off, so nothing can tell the difference. **Use a plain hardware id and tick it
+when you want that display**, exactly as you would for a monitor you are
+reserving.
+
+Run `PhantomMonitor.exe --diag` with a screen awake behind the amp and again
+with it off. If the reported resolution changes, the qualified rule will work.
+If it does not, nothing in software can detect it and a tick is the honest
+answer.
 
 Use `<1280x720` rather than an exact size: fallback EDIDs come in 640×480,
 800×600 and 1024×768. The comparison is by **area**, which is the only version
@@ -443,11 +456,15 @@ every monitor and reshuffles your windows and desktop icons.
   drops a cached EDID a few minutes after the screen goes dark and blocking
   resumes then; an adapter or a TV's own quick-start standby may hold it
   indefinitely, and then blocking is a tick in the settings.
-- **Everything here was tested on one machine.** The EDID timings, the
-  four-minute hold, the fallback resolutions - all of it comes from a single
-  Denon receiver, one adapter chain and one TV. Whether those numbers
-  generalise is genuinely unknown, so `--diag` output from other hardware is
-  the most useful thing anyone could send.
+- **Receivers differ, and not by a little.** A Denon tested here drops to a
+  800×600 fallback EDID a few minutes after the screen behind it goes dark,
+  which makes automatic blocking possible. A Yamaha tested here reports the
+  same EDID whether or not anything is awake, so there is no signal to detect
+  and blocking is a manual tick. Assume nothing about your own amp until
+  `--diag` tells you which kind it is.
+- The timings quoted here — the four-minute hold in particular — come from one
+  machine. `--diag` output from other hardware is the most useful thing anyone
+  could send.
 - An EDID hardware id identifies a monitor *model*, not an individual panel, so
   two identical monitors share one id. PhantomMonitor warns when it sees that.
 
