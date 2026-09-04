@@ -2621,9 +2621,20 @@ def print_diagnostics(cfg):
         print("hardware id to av_devices in config.json - and please report it, so")
         print("the built-in list catches up.")
         print()
+    if any(looks_like_av_device(m.hwid, m.name, cfg.get("av_devices"))
+           for m in monitors):
+        # Both amps tested here sat on the last good EDID for roughly four
+        # minutes after the screen went dark. Anyone comparing --diag output
+        # straight after hitting the TV remote sees no change and concludes,
+        # wrongly, that nothing can be detected.
+        print("Comparing this with a screen awake behind the amp? Switch the screen")
+        print("off, then WAIT FIVE MINUTES before running --diag again. Receivers")
+        print("hold the last good EDID for a few minutes; both amps tested took")
+        print("about four. Run it too soon and nothing will appear to change.")
+        print()
     print("If a receiver reports a power state above rather than 'not supported',")
     print("please open an issue - it would mean a screen switched off behind it")
-    print("can be detected, which is not currently thought possible.")
+    print("can be detected without waiting out that timeout.")
 
 
 def single_instance():

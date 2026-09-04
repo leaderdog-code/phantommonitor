@@ -217,16 +217,10 @@ on and off with no clicking. A Denon tested here behaves that way, falling back
 to 800×600 a few minutes after a screen goes dark.
 
 Other receivers change their **identity** instead. A **Yamaha HTR-4063** passes
-the downstream EDID straight through: with nothing attached Windows sees
-`YMH3148` "HTR-4063", and with a TV behind it Windows sees the TV's own id. A
-plain `YMH3148` rule therefore blocks the amp while nothing is connected to it,
-and stops matching once a screen is plugged in.
-
-**But that distinguishes unplugged from plugged in, not on from off.** With the
-TV connected and switched off, Windows still saw the TV's id — because the TV
-held the link up in standby and the amp went on relaying its EDID. So if a
-screen lives permanently behind your amp and you only switch it on and off,
-the identity never changes and this buys you nothing.
+the downstream EDID straight through: with nothing awake behind it Windows sees
+`YMH3148` "HTR-4063", and with a TV on behind it Windows sees the TV's own id. A
+plain `YMH3148` rule therefore blocks the amp whenever nothing is being shown on
+it, and stops matching once a screen wakes up.
 
 Note what that amp does *not* give you: it advertises a full 1920×1080 with
 nothing attached, so a size rule would never have caught it. Identity was the
@@ -234,13 +228,36 @@ signal all along.
 
 So there are two shapes of receiver, and both can be automatic:
 
-| Amp behaviour | What changes when a screen is *connected* | Rule to use |
+| Amp behaviour | What changes when a screen is *awake* behind it | Rule to use |
 |---|---|---|
 | Passes the screen's EDID through | the hardware id | plain `YMH3148` |
 | Keeps its own EDID, adjusts modes | the resolution | `DON0015@<1280x720` |
 
-Neither reacts to a screen merely being switched off, if that screen holds the
-link up in standby.
+### Both run on a timer — wait before you judge
+
+Neither amp reacts the moment you press the TV's power button. Both hold the
+last good EDID for a few minutes first, so a screen you have just switched off
+still looks fully present to Windows.
+
+Measured here, switching the TV off at the set and watching once a second:
+
+- **Yamaha HTR-4063** — went on reporting the Toshiba's `TSB0210` at 1920×1080
+  for about four minutes, then dropped to its own `YMH3148`, still 1920×1080
+- **Denon** — likewise held on for about four minutes, then fell back to
+  800×600 under its own `DON0015`
+
+So these rules **do** track a screen being switched off, not merely unplugged.
+They just do it late. Run `--diag` ten seconds after killing the TV and you will
+see no change at all and conclude, wrongly, that detection is impossible. Give
+it five minutes.
+
+The lag costs nothing in practice. The guard re-evaluates on every display
+change, so blocking engages the instant the EDID actually flips. It only matters
+if you expected the block to arrive the moment the screen went dark.
+
+When the EDID does flip, Windows treats it as a topology change: every monitor
+blanks for a second and relays. That flash is the amp letting go, and it is your
+cue that the rule has taken over.
 
 `--diag` tells you which you have. Look at the hardware id and resolution in
 each state you actually care about:
@@ -250,15 +267,14 @@ each state you actually care about:
 - **Neither changes** → nothing in software can tell, and a tick is the honest
   answer
 
-Be aware that a screen switched *off* usually looks identical to one switched
-on, because most TVs and many monitors hold the link up in standby. Automatic
-behaviour is far more likely when kit is physically unplugged than when it is
-merely powered down.
+Run `PhantomMonitor.exe --diag` with a screen awake behind the amp, then switch
+the screen off, **wait five minutes**, and run it again. If either the hardware
+id or the resolution has changed, a rule will work. If neither has changed after
+a good long wait, nothing in software can tell, and a tick is the honest answer.
 
-Run `PhantomMonitor.exe --diag` with a screen awake behind the amp and again
-with it off. If the reported resolution changes, the qualified rule will work.
-If it does not, nothing in software can detect it and a tick is the honest
-answer.
+Some screens hold the link up in standby firmly enough that nothing upstream
+ever notices — a TV's quick-start setting is the usual culprit, and turning it
+off makes the display drop away properly.
 
 Expect the tick more often than not. Graphics cards commonly ship with a single
 HDMI port and three DisplayPorts, so anyone running an amp *and* a TV is on an
@@ -449,7 +465,7 @@ depends entirely on what is in the cable path. This decides which rule you want.
 |------|--------------------------------|
 | Direct DisplayPort | Display **vanishes**. No phantom — but Windows scrambles the windows that were on it, and never puts them back. |
 | Direct HDMI | Varies by panel. Many TVs and some monitors hold the link in standby. |
-| Through an **AV receiver** | Receiver keeps serving a cached EDID, then falls back to its own after a few minutes. A resolution-qualified rule tracks this by itself. |
+| Through an **AV receiver** | Receiver keeps serving the cached EDID, then after a few minutes falls back to its own — either at a smaller size or under its own name. A rule tracks this by itself, once the timeout passes. |
 | Through an **adapter chain** (DisplayPort→DVI→HDMI and similar) | Nothing changes at all. |
 | **TV with quick-start / CEC enabled** | The TV's input stays powered, so the link never drops, whatever it is plugged into. |
 
