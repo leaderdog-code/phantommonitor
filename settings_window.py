@@ -91,8 +91,18 @@ def run(config_path, monitors):
                 return spec
         return None
 
+    def assigned_slot(hwid):
+        for key, value in targets.items():
+            if value == hwid and key.isdigit():
+                return int(key)
+        return 99  # unassigned displays sink to the bottom
+
+    # Read in slot order, so the list matches the keys you actually press.
+    # Sorted on open rather than live, or rows would jump about mid-edit.
+    ordered = sorted(monitors, key=lambda m: (assigned_slot(m[1]), m[0]))
+
     block_vars, slot_vars = {}, {}
-    for row, (name, hwid, w, h, x, y, primary) in enumerate(monitors, start=1):
+    for row, (name, hwid, w, h, x, y, primary) in enumerate(ordered, start=1):
         text = "%s\n%d×%d  [%s]  at %d,%d%s" % (
             name, w, h, hwid, x, y, "   ★ primary" if primary else "")
         ttk.Label(box, text=text, justify="left").grid(
@@ -109,7 +119,7 @@ def run(config_path, monitors):
                      values=["-"] + [str(i) for i in range(1, slot_count + 1)]).grid(
             row=row, column=2, padx=8)
 
-    ttk.Label(box, text="A hotkey slot is yours to assign - Windows' own display\n"
+    ttk.Label(box, text="Listed by hotkey slot. A slot is yours to assign - Windows' own display\n"
                         "numbers cannot be read back, so they are not used here.",
               foreground="#555").grid(row=len(monitors) + 1, column=0, columnspan=3,
                                       sticky="w", padx=10, pady=(2, 8))
