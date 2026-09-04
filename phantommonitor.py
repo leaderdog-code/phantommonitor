@@ -1341,6 +1341,7 @@ class TrayApp:
         self.icons_quiet_until = 0.0  # do not snapshot while a change is settling
         self.icon_listview = 0
         self.icon_watch_stop = None
+        self.settings_child = None   # one settings window at a time
         self.window_snapshot = {}   # {hwnd: placement} - the last known good state
         self.windows_frozen = False  # stop snapshotting while a change is underway
         self.last_signature = ""     # only restore when the layout actually changed
@@ -2012,6 +2013,9 @@ class TrayApp:
         Windows message pump, and a crash in the settings UI should not take
         the guard down with it.
         """
+        if self.settings_child and self.settings_child.poll() is None:
+            log.info("settings window is already open")
+            return
         if getattr(sys, "frozen", False):
             command = [sys.executable, "--settings"]
         else:
@@ -2022,6 +2026,7 @@ class TrayApp:
         except OSError as exc:
             log.error("could not open settings: %s", exc)
             return
+        self.settings_child = child
 
         def wait_then_reload():
             child.wait()
