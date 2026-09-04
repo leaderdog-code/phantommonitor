@@ -318,6 +318,46 @@ executable will not launch there; it would need building against Python 3.8,
 which is itself end-of-life. If you are on 8.1 the executable ought to run —
 if you try it, please open an issue either way.
 
+## What sits between the card and the screen
+
+Whether a switched-off screen disappears from Windows, or lingers as a phantom,
+depends entirely on what is in the cable path. This decides which rule you want.
+
+| Path | When the screen is switched off |
+|------|--------------------------------|
+| Direct DisplayPort | Display **vanishes**. No phantom — but Windows scrambles the windows that were on it, and never puts them back. |
+| Direct HDMI | Varies by panel. Many TVs and some monitors hold the link in standby. |
+| Through an **AV receiver** | Receiver keeps serving a cached EDID, then falls back to its own after a few minutes. A resolution-qualified rule tracks this by itself. |
+| Through an **adapter chain** (DisplayPort→DVI→HDMI and similar) | Nothing changes at all. |
+| **TV with quick-start / CEC enabled** | The TV's input stays powered, so the link never drops, whatever it is plugged into. |
+
+Two separate things can make a dark screen look present, and they are easy to
+confuse:
+
+**Something holds the link up.** Usually the display's own standby — most TVs
+keep their input powered for quick-start and CEC — but an active converter can
+do it too. To tell which, pull the screen's mains plug: if the display then
+disappears from Windows, it was the screen's standby, and its **quick-start or
+eco setting** controls it. If it persists, whatever is in the middle is holding
+it and no setting on the screen will change that.
+
+**DDC/CI does not survive conversion.** Receivers, converters, switches and KVMs
+do not pass the I2C command channel through, so the display cannot be asked
+whether it is on. `--diag` reports this per display. Where it says *not
+supported*, power state is undetectable and no software can work around it.
+
+So:
+
+- **Detectable** (resolution changes when the screen goes away) → use a
+  qualified rule like `ABC1234@<1280x720` and it manages itself
+- **Undetectable** (nothing changes) → use a plain `ABC1234` and tick it in the
+  tray when you want that screen
+
+Worth knowing that quick-start is a genuine trade rather than an obvious win to
+disable: turning it off makes the display vanish properly when switched off, so
+no rule is needed — but then every power cycle is a display change, which blanks
+every monitor and reshuffles your windows and desktop icons.
+
 ## Known limits
 
 - Window position restore is **per session**, held in memory. It fixes the
