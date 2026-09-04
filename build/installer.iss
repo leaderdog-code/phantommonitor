@@ -65,9 +65,27 @@ Filename: "{app}\{#AppExe}"; Description: "Start {#AppName} now"; \
     Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
-; Logs and the generated tray icons are created at runtime beside the exe.
+; Created at runtime beside the exe, so Inno does not know about them.
 Type: filesandordirs; Name: "{app}\logs"
 Type: files; Name: "{app}\icon_active.ico"
 Type: files; Name: "{app}\icon_paused.ico"
-; config.json and icon_layouts.json are deliberately left behind - they are the
-; user's settings and desktop layout, and reinstalling should not lose them.
+
+[Code]
+{ Settings and the saved desktop icon layout are the user's data, not ours.
+  Deleting them silently loses a layout they may have spent time on; keeping
+  them silently leaves files behind after an "uninstall". So ask, and default
+  to a clean removal. }
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usPostUninstall then
+  begin
+    if MsgBox('Also remove your settings and saved desktop icon layout?'#13#10#13#10
+              + 'Choose No to keep them, so a future reinstall picks up where '
+              + 'you left off.', mbConfirmation, MB_YESNO) = IDYES then
+    begin
+      DeleteFile(ExpandConstant('{app}\config.json'));
+      DeleteFile(ExpandConstant('{app}\icon_layouts.json'));
+      RemoveDir(ExpandConstant('{app}'));
+    end;
+  end;
+end;
