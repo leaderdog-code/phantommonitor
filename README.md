@@ -202,8 +202,10 @@ toggles, moving the current window, and the file actions.
 | `DON0015@800x600` | Block only at exactly that size |
 | `DON0015@<1280x720` | Block only while it has **fewer pixels** than that |
 
-Start with the plain form. The qualified one only helps if your amp advertises
-something small when nothing is attached, and plenty do not — see below.
+Start with the plain form. It is enough on its own for any amp that passes the
+downstream EDID through, because the display's identity changes when a screen
+appears. The qualified form is for amps that keep their own identity and only
+change resolution — see below.
 
 The `<` form exists for "I might plug a real screen in later" — **but only some
 receivers make it possible**, so check yours before relying on it.
@@ -214,15 +216,28 @@ phantom and stops matching when a real screen appears, so blocking turns itself
 on and off with no clicking. A Denon tested here behaves that way, falling back
 to 800×600 a few minutes after a screen goes dark.
 
-Other receivers give you no signal at all, and this is the more common case.
-A **Yamaha HTR-4063** tested on a native HDMI port advertises **1920×1080 with
-nothing attached to it whatsoever** — a phantom indistinguishable from a real
-monitor by resolution alone. No size rule can catch that, at any threshold.
-**Use a plain hardware id and tick it when you want that display**, exactly as
-you would for a monitor you are reserving.
+Other receivers change their **identity** instead, and for those the plain rule
+is already automatic. A **Yamaha HTR-4063** passes the downstream EDID straight
+through: with nothing attached Windows sees `YMH3148` "HTR-4063", and with a TV
+behind it Windows sees the TV — a different hardware id entirely. So a plain
+`YMH3148` rule blocks the phantom and stops matching the moment a real screen
+appears, with no qualifier and no clicking.
 
-So reach for the plain form first. The qualified form is a bonus that works only
-if your amp happens to fall back to something small.
+Note what that amp does *not* give you: it advertises a full 1920×1080 with
+nothing attached, so a size rule would never have caught it. Identity was the
+signal all along.
+
+So there are two shapes of receiver, and both can be automatic:
+
+| Amp behaviour | What changes when a screen appears | Rule to use |
+|---|---|---|
+| Passes the screen's EDID through | the hardware id | plain `YMH3148` |
+| Keeps its own EDID, adjusts modes | the resolution | `DON0015@<1280x720` |
+
+`--diag` tells you which you have: look at the hardware id with a screen awake
+behind the amp, then again with it off. If the id changes, use a plain rule. If
+the id stays and only the resolution moves, qualify it. If neither changes,
+nothing in software can detect it and a tick is the honest answer.
 
 Run `PhantomMonitor.exe --diag` with a screen awake behind the amp and again
 with it off. If the reported resolution changes, the qualified rule will work.
@@ -470,13 +485,14 @@ every monitor and reshuffles your windows and desktop icons.
   drops a cached EDID a few minutes after the screen goes dark and blocking
   resumes then; an adapter or a TV's own quick-start standby may hold it
   indefinitely, and then blocking is a tick in the settings.
-- **Receivers differ enormously.** Both tested on a native HDMI port, so the
-  comparison is clean. A **Denon AVR** drops to a 800×600 fallback EDID a few
-  minutes after the screen behind it goes dark, which is what makes automatic
-  blocking possible at all. A **Yamaha HTR-4063** advertises **1920×1080 with
-  nothing attached** — a phantom that no size rule can distinguish from a real
-  monitor. Assume nothing about your own amp until `--diag` tells you what it
-  reports with nothing plugged into it.
+- **Receivers differ enormously**, and in a way that decides which rule works.
+  Both tested on a native HDMI port. A **Denon AVR** keeps its own EDID
+  identity whatever is behind it and drops to 800×600 a few minutes after the
+  screen goes dark, so the resolution is the signal. A **Yamaha HTR-4063**
+  passes the downstream EDID through, so the hardware id itself changes, and a
+  plain rule on the amp's own id is automatic. It also advertises 1920×1080
+  with nothing attached, so a size rule would never have caught it. Check
+  `--diag` with and without a screen behind your amp before assuming either.
 - An adapter in the path removes the question entirely: an active
   DisplayPort-to-HDMI converter regenerates the link, so the card sees the
   adapter rather than whatever is behind it, and nothing changes when a screen

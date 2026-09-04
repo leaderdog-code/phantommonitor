@@ -16,7 +16,6 @@ if win32gui.FindWindow("PhantomMonitorWnd", None):
 cfg = mg.load_config()
 # Force an unqualified rule: these tests must behave the same whether or not a
 # real screen happens to be plugged into the amp right now.
-cfg["blocked_hwids"] = ["DON0015"]
 # Hotkey pins deliberately override number lookups, so number-based tests must
 # opt out or they assert against whichever screen the pin resolves to.
 cfg["hotkey_targets"] = {}
@@ -28,7 +27,17 @@ class FakeMon:
     def __init__(self, w, h, hwid="DON0015"):
         self.hwid = hwid
         self.rect = (0, 0, w, h)
-denon = next(m for m in guard.monitors if m.hwid == "DON0015")
+# Pick a display to treat as the blocked one rather than demanding a specific
+# amp. The suite has to run on any machine - a contributor will not own the
+# hardware this was written against.
+if len(guard.monitors) < 2:
+    print("These tests need at least two displays attached.")
+    sys.exit(2)
+denon = min((m for m in guard.monitors if not m.primary),
+            key=lambda m: (m.rect[2] - m.rect[0]) * (m.rect[3] - m.rect[1]))
+BLOCK_HWID = denon.hwid
+print("using as the blocked display:", denon.label())
+cfg["blocked_hwids"] = [BLOCK_HWID]
 print("target-to-avoid:", denon.label(), denon.rect)
 print("rescue target  :", guard.rescue_target().label())
 print()
@@ -60,9 +69,9 @@ def check(name, condition, detail=""):
 
 # 1 - a normal window sitting on the blocked display
 park_on_denon()
-check("parked on Denon", where(hwnd).hwid == "DON0015", str(win32gui.GetWindowRect(hwnd)))
+check("parked on Denon", where(hwnd).hwid == BLOCK_HWID, str(win32gui.GetWindowRect(hwnd)))
 moved = guard.sweep("test")
-check("sweep evacuates it", moved >= 1 and where(hwnd).hwid != "DON0015",
+check("sweep evacuates it", moved >= 1 and where(hwnd).hwid != BLOCK_HWID,
       "moved %d; test window now on %s %s"
       % (moved, where(hwnd).name, win32gui.GetWindowRect(hwnd)))
 
@@ -76,7 +85,7 @@ root.update()
 guard.sweep("test")
 root.update()
 still_max = win32gui.GetWindowPlacement(hwnd)[1] == win32con.SW_SHOWMAXIMIZED
-check("maximized window rescued", where(hwnd).hwid != "DON0015" and still_max,
+check("maximized window rescued", where(hwnd).hwid != BLOCK_HWID and still_max,
       "maximized=%s on %s" % (still_max, where(hwnd).name))
 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
 root.update()
@@ -91,11 +100,11 @@ ox, oy = guard.workspace_offset()
 normal = placement[4]
 restore_rect = (normal[0] + ox, normal[1] + oy, normal[2] + ox, normal[3] + oy)
 restore_mon = mg.monitor_of_rect(restore_rect, guard.monitors)
-check("minimized restore point fixed", restore_mon.hwid != "DON0015",
+check("minimized restore point fixed", restore_mon.hwid != BLOCK_HWID,
       "reappears on %s %s" % (restore_mon.name, restore_rect))
 win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
 root.update()
-check("restores off the Denon", where(hwnd).hwid != "DON0015", where(hwnd).name)
+check("restores off the Denon", where(hwnd).hwid != BLOCK_HWID, where(hwnd).name)
 
 # 5 - window size must be preserved across the move
 park_on_denon(w=640, h=480)
@@ -107,12 +116,12 @@ check("size preserved", (right - left, bottom - top) == (640, 480),
 # 6 - guard must stand down rather than block every display
 cfg["blocked_hwids"] = [m.hwid for m in guard.monitors]
 check("refuses to block everything", guard.blocked() == [])
-cfg["blocked_hwids"] = ["DON0015"]
+cfg["blocked_hwids"] = [BLOCK_HWID]
 
 # 7 - paused guard must not move anything
 cfg["enabled"] = False
 park_on_denon()
-check("paused guard does nothing", guard.sweep("test") == 0 and where(hwnd).hwid == "DON0015")
+check("paused guard does nothing", guard.sweep("test") == 0 and where(hwnd).hwid == BLOCK_HWID)
 cfg["enabled"] = True
 guard.sweep("test")
 
@@ -194,7 +203,7 @@ win32gui.SetWindowPos(hwnd, 0, mon1.work[0] + 200, mon1.work[1] + 200, 500, 350,
                       win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
 root.update()
 elsewhere = next(m for m in guard.monitors
-                 if m.hwid != "DON0015" and not m.primary)
+                 if m.hwid != BLOCK_HWID and not m.primary)
 ok = guard.move_active_to(elsewhere.number, hwnd, "test")
 root.update()
 check("tray menu moves the captured window",
@@ -270,7 +279,7 @@ check("original size restored on the way out",
 
 # 15 - moving onto a blocked monitor is refused, rather than starting a fight
 #      with the guard that would yank it straight back.
-cfg["blocked_hwids"] = ["DON0015"]
+cfg["blocked_hwids"] = [BLOCK_HWID]
 check("refuses to move onto a blocked monitor",
       not guard.move_active_to(denon.number, hwnd, "test"))
 check("still moves to allowed monitors",
@@ -315,7 +324,7 @@ for w, h, should_block, what in [
 # 17 - the pointer fence: one rectangle covering every allowed display and no
 #      blocked one, or None when the layout cannot be expressed that way.
 box = mg.cursor_clip_rect(guard.monitors, [denon])
-allowed = [m for m in guard.monitors if m.hwid != "DON0015"]
+allowed = [m for m in guard.monitors if m.hwid != BLOCK_HWID]
 check("fence excludes the Denon",
       box is not None and mg.overlap_area(box, denon) == 0, str(box))
 check("fence covers every allowed display",
@@ -432,11 +441,11 @@ check("a tag with rubbish in it does not crash",
 #      makes a dedicated chat or dashboard screen possible at all.
 import os
 me = os.path.basename(sys.executable).lower()
-cfg["blocked_hwids"] = ["DON0015"]
+cfg["blocked_hwids"] = [BLOCK_HWID]
 cfg["app_displays"] = {me: denon.hwid}
 park_on_denon()
 check("a pinned app is left on its own display",
-      guard.sweep("test") == 0 and where(hwnd).hwid == "DON0015",
+      guard.sweep("test") == 0 and where(hwnd).hwid == BLOCK_HWID,
       where(hwnd).name)
 check("the display it is pinned to is found",
       guard.assigned_display(hwnd) is denon)
@@ -445,7 +454,7 @@ check("the display it is pinned to is found",
 cfg["app_displays"] = {me: "GSM5BBF"}
 park_on_denon()
 check("an app pinned elsewhere is still evacuated",
-      guard.sweep("test") >= 1 and where(hwnd).hwid != "DON0015")
+      guard.sweep("test") >= 1 and where(hwnd).hwid != BLOCK_HWID)
 
 cfg["app_displays"] = {}
 check("no pin means no assigned display",

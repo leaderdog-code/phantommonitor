@@ -51,7 +51,7 @@ AV_NAME_HINTS = ("avamp", "av amp", "receiver", "avr", "amplifier", "soundbar",
                  "htr-", "rx-v", "vsx-", "sr-", "extractor", "splitter")
 
 
-def looks_like_av_device(hwid, name):
+def looks_like_av_device(hwid, name, declared=()):
     """A guess at whether a display is really an amp, switch or extractor.
 
     Only ever used to suggest, never to block anything on its own. An amp names
@@ -59,6 +59,8 @@ def looks_like_av_device(hwid, name):
     signal than resolution, since a Yamaha advertises a full 1920x1080 with
     nothing attached to it at all.
     """
+    if hwid and hwid in (declared or ()):
+        return "marked by you as an amp or adapter"
     vendor = AV_VENDORS.get((hwid or "")[:3].upper())
     if vendor:
         return vendor
@@ -109,10 +111,13 @@ def run(config_path, monitors):
     ttk.Label(box, text="Block windows\nand pointer", justify="center").grid(
         row=0, column=1, padx=8, pady=(6, 2))
     ttk.Label(box, text="Hotkey slot").grid(row=0, column=2, padx=8, pady=(6, 2))
+    ttk.Label(box, text="Amp, not\na display", justify="center").grid(
+        row=0, column=3, padx=8, pady=(6, 2))
 
     rules = list(cfg.get("blocked_hwids") or [])
     parked = list(cfg.get("blocked_rules_parked") or [])
     targets = dict(cfg.get("hotkey_targets") or {})
+    declared = list(cfg.get("av_devices") or [])
 
     def rule_for(hwid):
         for spec in rules:
@@ -130,9 +135,9 @@ def run(config_path, monitors):
     # Sorted on open rather than live, or rows would jump about mid-edit.
     ordered = sorted(monitors, key=lambda m: (assigned_slot(m[1]), m[0]))
 
-    block_vars, slot_vars = {}, {}
+    block_vars, slot_vars, av_vars = {}, {}, {}
     for row, (name, hwid, w, h, x, y, primary) in enumerate(ordered, start=1):
-        hint = looks_like_av_device(hwid, name)
+        hint = looks_like_av_device(hwid, name, declared)
         text = "%s\n%d×%d  [%s]  at %d,%d%s%s" % (
             name, w, h, hwid, x, y, "   ★ primary" if primary else "",
             ("\n%s — an amp or adapter, not a display" % hint) if hint else "")
@@ -150,9 +155,17 @@ def run(config_path, monitors):
                      values=["-"] + [str(i) for i in range(1, slot_count + 1)]).grid(
             row=row, column=2, padx=8)
 
-    ttk.Label(box, text="Listed by hotkey slot. A slot is yours to assign - Windows' own display\n"
-                        "numbers cannot be read back, so they are not used here.",
-              foreground="#555").grid(row=len(monitors) + 1, column=0, columnspan=3,
+        avar = tk.BooleanVar(value=hwid in declared)
+        av_vars[hwid] = avar
+        ttk.Checkbutton(box, variable=avar).grid(row=row, column=3)
+
+    ttk.Label(box, text="Marking something as an amp only labels it - nothing is\n"
+                        "blocked on that basis. Please report unlisted kit so\n"
+                        "others benefit.\n"
+                        "Listed by hotkey slot. A slot is yours to assign - Windows'\n"
+                        "own display numbers cannot be read back, so they are not\n"
+                        "used here.",
+              foreground="#555").grid(row=len(monitors) + 1, column=0, columnspan=4,
                                       sticky="w", padx=10, pady=(2, 8))
 
     # --- behaviour ----------------------------------------------------------
@@ -244,6 +257,7 @@ def run(config_path, monitors):
         cfg["blocked_hwids"] = new_rules
         cfg["blocked_rules_parked"] = new_parked
         cfg["hotkey_targets"] = new_targets
+        cfg["av_devices"] = sorted(h for h, v in av_vars.items() if v.get())
         for key, var in toggle_vars.items():
             cfg[key] = bool(var.get())
         cfg["hotkeys"] = new_hotkeys

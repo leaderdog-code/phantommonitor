@@ -116,6 +116,10 @@ DEFAULT_CONFIG = {
     # {"discord.exe": "GSM7814"}. Those apps open on that display and are never
     # evacuated from it, even when it is blocked - which is what makes a
     # dedicated chat or dashboard screen possible.
+    # Hardware ids you have marked yourself as an amp, switch or extractor
+    # rather than a display. Only affects what is shown - nothing is blocked on
+    # this basis. Worth reporting so the built-in list catches up.
+    "av_devices": [],
     "app_displays": {},
     "app_positions": {},
     "support_url": "",
@@ -605,12 +609,17 @@ AV_NAME_HINTS = ("avamp", "av amp", "receiver", "avr", "amplifier", "soundbar",
                  "htr-", "rx-v", "vsx-", "sr-", "extractor", "splitter")
 
 
-def looks_like_av_device(hwid, name):
+def looks_like_av_device(hwid, name, declared=()):
     """A guess at whether a display is really an amp, switch or extractor.
 
     Only ever used to suggest - never to block anything on its own. Being wrong
     here should cost a line of text, nothing more.
+
+    `declared` holds hardware ids the user has marked themselves, for kit the
+    built-in list has not caught up with.
     """
+    if hwid and hwid in (declared or ()):
+        return "marked by you as an amp or adapter"
     vendor = AV_VENDORS.get((hwid or "")[:3].upper())
     if vendor:
         return vendor
@@ -2552,7 +2561,7 @@ def print_diagnostics(cfg):
                       for r in cfg.get("blocked_hwids", []))
         print("%s   (hotkey slot %d)" % (mon.name, mon.number))
         print("   hardware id : %s" % (mon.hwid or "?"))
-        hint = looks_like_av_device(mon.hwid, mon.name)
+        hint = looks_like_av_device(mon.hwid, mon.name, cfg.get("av_devices"))
         if hint:
             print("   looks like  : %s, not a display - a likely thing to block"
                   % hint)
@@ -2583,6 +2592,13 @@ def print_diagnostics(cfg):
     print("pointer fence: %s" % (box if box else
                                  "not possible with this layout / nothing blocked",))
     print()
+    unknown = [m for m in monitors
+               if not looks_like_av_device(m.hwid, m.name, cfg.get("av_devices"))]
+    if unknown:
+        print("If any display above is really an amp, switch or extractor, add its")
+        print("hardware id to av_devices in config.json - and please report it, so")
+        print("the built-in list catches up.")
+        print()
     print("If a receiver reports a power state above rather than 'not supported',")
     print("please open an issue - it would mean a screen switched off behind it")
     print("can be detected, which is not currently thought possible.")
@@ -2615,7 +2631,8 @@ def main():
             rules = cfg.get("blocked_hwids", [])
             blocked = (" [BLOCKED]"
                        if any(monitor_matches_block(mon, r) for r in rules) else "")
-            hint = looks_like_av_device(mon.hwid, mon.name)
+            hint = looks_like_av_device(mon.hwid, mon.name,
+                                        cfg.get("av_devices"))
             note = ("   <-- looks like a %s, not a monitor" % hint) if hint else ""
             print("  hotkey %d   %s%s%s" % (mon.number, mon.label(), blocked, note))
         return 0
