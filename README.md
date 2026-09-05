@@ -66,20 +66,21 @@ of your displays.
 | `ABC1234@1920x1080` | only while it is exactly this size |
 | `ABC1234@<1280x720` | only while it has fewer pixels than this |
 
-"Whenever the id is present" is the useful part, and it is why the plain form is
-usually enough. An AV receiver is an HDMI repeater: it reads the EDID of
-whatever is downstream and presents that upstream, so with a screen awake behind
-it Windows sees *the screen's* id, not the amp's. The rule stops matching on its
-own, and that display becomes an ordinary monitor.
+Which form you want depends on how your amp behaves when a screen wakes up
+behind it. There are two kinds, and both were measured here:
 
-Switch the screen off and the amp eventually goes back to advertising itself.
-Its id returns, the rule matches again, and blocking resumes without you
-touching anything.
+| The amp | What changes when a screen wakes up | Rule | Tested on |
+|---|---|---|---|
+| Passes the screen's EDID upstream | the **id** — Windows sees the screen, not the amp | `YMH3148` | Yamaha HTR-4063 |
+| Keeps its own EDID | the **resolution** — the id never changes | `DON0015@<1280x720` | Denon |
 
-Use `@` forms only when the id alone will not do — a display you are reserving
-that must stay blocked with a screen attached, or an amp that reports the same
-id either way. The `<` form compares total pixels, so it is not fooled by a
-monitor turned on its side.
+Either way the rule stops matching when a real screen is awake, so that display
+becomes an ordinary monitor, and starts matching again once the screen goes and
+the amp reverts. Nothing to switch by hand.
+
+The `<` form compares total pixels, so it is not fooled by a monitor turned on
+its side. Use an exact `@size` only for a display you are reserving that must
+stay blocked whatever is attached.
 
 Check yours rather than assuming. Run `--diag` with a screen awake behind the
 amp, switch that screen off, **wait several minutes**, and run it again. Amps

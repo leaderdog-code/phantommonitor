@@ -41,20 +41,26 @@ differ. Measure your own with `--diag` rather than trusting a number.
 
 ## What the amp does when a screen wakes up
 
-Passing the downstream EDID upstream is what a repeater is *specified* to do,
-so expect it to be the normal case rather than a quirk of one brand.
+Two behaviours, both measured on native HDMI ports with a screen plugged in and
+unplugged:
 
-Measured on a **Yamaha HTR-4063**, native HDMI: with a Toshiba awake behind it
-Windows reports `TSB0210`; `YMH3148` appears only once the amp lets go. The
-resolution was identical in both states. So the id is the signal, and a plain
-rule on the amp's own id stands itself down when a screen wakes up.
+| Amp | Nothing behind it | Screen awake behind it | Signal |
+|---|---|---|---|
+| Yamaha HTR-4063 | `YMH3148`, 1920x1080 | `TSB0210` (the TV's id), same size | the **id** |
+| Denon | `DON0015`, 800x600 | `DON0015`, 1920x1080 | the **resolution** |
 
-A **Denon** was also tested, but only ever with nothing behind it, where it
-reports `DON0015`. Earlier notes here said it "keeps its own identity whatever
-is behind it" — that was never actually tested with a screen attached, and given
-what a repeater is for, it is more likely to pass the screen's EDID through in
-the same way. Treat the Yamaha result as the expected behaviour and check your
-own.
+The Yamaha passes the downstream EDID upstream, so Windows sees the TV and not
+the amp. Its resolution is identical either way, so no size rule would ever have
+caught it.
+
+The Denon does not pass it through. Plugging a monitor in left the id and the
+name untouched — still `DON0015`, still "DENON-AVAMP" — and only the resolution
+moved, 800x600 to 1920x1080. It presents its own EDID and offers whatever modes
+the screen behind it can take.
+
+So passing EDID upstream is what a repeater is *specified* to do, but it is not
+what they all do. Check yours rather than reasoning from the spec — this project
+got it wrong in both directions before testing it.
 
 **Neither advertises a small "fallback" resolution.** Both offer modes up to
 1920x1080 with nothing attached. Earlier notes claimed the Denon dropped to
