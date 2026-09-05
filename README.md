@@ -28,7 +28,7 @@ Download from [Releases](../../releases).
 | File | What it is |
 |---|---|
 | `PhantomMonitor-Setup.exe` | Installer. Per-user, no admin prompt, optional start at sign-in. |
-| `PhantomMonitor.exe` | Portable. Run it from anywhere. Config and logs sit beside it. |
+| `PhantomMonitor.exe` | Portable. Run it from anywhere. Config and logs sit beside it, or in your profile if that folder is read-only. |
 
 Neither needs Python. SmartScreen will warn on first run — unsigned software
 always does. **More info -> Run anyway**, or build it yourself from source.

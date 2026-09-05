@@ -41,10 +41,32 @@ if getattr(sys, "frozen", False):
     APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
 else:
     APP_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(APP_DIR, "config.json")
-LOG_DIR = os.path.join(APP_DIR, "logs")
+
+
+def _writable(folder):
+    """Can we actually create files here? Portable copies land anywhere."""
+    try:
+        os.makedirs(folder, exist_ok=True)
+        probe = os.path.join(folder, ".write_probe")
+        with open(probe, "w"):
+            pass
+        os.remove(probe)
+        return True
+    except OSError:
+        return False
+
+
+# The portable build keeps its settings beside the executable, which is the
+# point of it - copy the folder, keep your setup. But people drop a portable
+# exe anywhere, and Program Files is read-only without elevation. Falling back
+# to the profile keeps it running instead of dying at startup with no window,
+# no tray icon and no log to say why.
+DATA_DIR = APP_DIR if _writable(APP_DIR) else os.path.join(
+    os.environ.get("LOCALAPPDATA") or os.path.expanduser("~"), "PhantomMonitor")
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+LOG_DIR = os.path.join(DATA_DIR, "logs")
 LOG_PATH = os.path.join(LOG_DIR, "phantommonitor.log")
-ICON_LAYOUT_PATH = os.path.join(APP_DIR, "icon_layouts.json")
+ICON_LAYOUT_PATH = os.path.join(DATA_DIR, "icon_layouts.json")
 PROJECT_URL = "https://github.com/leaderdog-code/phantommonitor"
 RELEASES_URL = PROJECT_URL + "/releases"
 LATEST_API = "https://api.github.com/repos/leaderdog-code/phantommonitor/releases/latest"
@@ -247,13 +269,19 @@ def setup_logging(level, path=None):
     sharing violation and BOTH of them spew tracebacks on every write
     thereafter. It has to be a separate file.
     """
-    os.makedirs(LOG_DIR, exist_ok=True)
     log.setLevel(getattr(logging, str(level).upper(), logging.INFO))
     fmt = logging.Formatter("%(asctime)s %(levelname)-7s %(message)s", "%Y-%m-%d %H:%M:%S")
-    handler = RotatingFileHandler(path or LOG_PATH, maxBytes=512000,
-                                  backupCount=3, encoding="utf-8")
-    handler.setFormatter(fmt)
-    log.addHandler(handler)
+    # Never let logging be the thing that stops the program starting. Without
+    # a console there is nothing to print a traceback to, so a failure here
+    # would look exactly like the app silently not running.
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        handler = RotatingFileHandler(path or LOG_PATH, maxBytes=512000,
+                                      backupCount=3, encoding="utf-8")
+        handler.setFormatter(fmt)
+        log.addHandler(handler)
+    except OSError:
+        pass
     if sys.stdout is not None:
         stream = logging.StreamHandler(sys.stdout)
         stream.setFormatter(fmt)
