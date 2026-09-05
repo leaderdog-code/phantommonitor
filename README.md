@@ -106,18 +106,16 @@ restores what the change displaced.
 Desktop icons get the same treatment, since Windows recalculates the icon grid
 on a display change and never restores it either.
 
-Both are on by default. **Settings and more ▸ Layouts** has the switches, plus
-manual save and restore.
+Both are on by default, with the switches under **Settings and more**.
 
 ## Saving an arrangement
 
 Set a screen up the way you like — chat down one side, a couple of browser
-windows filling the rest — then **Settings and more ▸ Save this arrangement
-as...**, pick which display, and give it a name. *Streaming*, *Accounting*,
+windows filling the rest — then **Arrangements ▸ Save this arrangement as...**, pick which display, and give it a name. *Streaming*, *Accounting*,
 whatever fits.
 
-Later, **Arrange windows like...** and pick the name. Or **Set up like...,
-opening what is missing**, which starts anything that is not running first.
+Later, **Arrangements ▸ Arrange windows like...** and pick the name. Or **Set
+up like..., opening what is missing**, which starts anything not running first.
 
 **Save per display.** A primary screen is usually a free-for-all nobody wants
 recorded, while a side screen is deliberately laid out. Saving one display into
@@ -135,7 +133,7 @@ window handles do not, and it does not break when a page title changes.
   on another screen. Handy for "set my streaming screen up", but it means a
   browser window you wanted left elsewhere can be collected too — the slots
   only know "a brave.exe window", not which one you cared about.
-- **Undo.** *Settings and more ▸ Undo that arrangement* puts the windows it
+- **Undo.** *Arrangements ▸ Undo that arrangement* puts the windows it
   moved back where they were. It records only the ones it is about to touch,
   just before touching them, so anything it collected from another screen goes
   home. Available until you arrange again or restart the app.
@@ -155,7 +153,7 @@ arrangement contains.
 
 ### Opening what is missing
 
-**Settings and more ▸ Set this screen up, opening what is missing** starts
+**Arrangements ▸ Set up like..., opening what is missing** starts
 anything the layout needs that is not already open, waits for it, then arranges
 everything. The executable is recorded when you save the arrangement.
 

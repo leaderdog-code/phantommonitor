@@ -2619,6 +2619,40 @@ class TrayApp:
         add("Rescue windows now",
             lambda: self.guard.sweep("manual", include_offscreen=True))
 
+        # Top level rather than buried in Settings: saving and applying a
+        # layout is a daily action, and it was two hops away.
+        modes = self._load_modes()
+        arrange = win32gui.CreatePopupMenu()
+        save_menu = win32gui.CreatePopupMenu()
+        add("Every display", lambda: self._save_arrangement(), into=save_menu)
+        sep(into=save_menu)
+        for mon in self.guard.monitors:
+            add(mon.label(),
+                (lambda h: lambda: self._save_arrangement(h))(mon.hwid),
+                into=save_menu)
+        add_sub("Save this arrangement as...", save_menu, into=arrange)
+        if modes:
+            apply_menu = win32gui.CreatePopupMenu()
+            setup_menu = win32gui.CreatePopupMenu()
+            for name in sorted(modes):
+                add(name,
+                    (lambda n: lambda: self._apply_arrangement(mode=n))(name),
+                    into=apply_menu)
+                add(name,
+                    (lambda n: lambda: self._apply_arrangement(
+                        mode=n, launch=True))(name),
+                    into=setup_menu)
+            add_sub("Arrange windows like...", apply_menu, into=arrange)
+            # Separate, because this starts programs and that should never
+            # happen as a side effect of tidying a screen.
+            add_sub("Set up like..., opening what is missing", setup_menu,
+                    into=arrange)
+        sep(into=arrange)
+        add("Undo that arrangement", self._undo_arrangement,
+            enabled=bool(self._load_arrangement(ARRANGEMENT_UNDO_PATH)),
+            into=arrange)
+        add_sub("Arrangements", arrange)
+
         # Pinning is "this app, that screen", and both are in front of the user
         # at the moment they open this menu.
         if self.menu_target and is_manageable(self.menu_target, self.cfg):
@@ -2671,40 +2705,6 @@ class TrayApp:
         add("Save window + icon layout now", self._snapshot_all, into=more)
         add("Restore window + icon layout", self._restore_all, into=more)
         sep(into=more)
-        modes = self._load_modes()
-
-        # Save: pick which screen, then it asks for a name. Per screen because
-        # a primary display is usually a free-for-all nobody wants recorded,
-        # while a side screen is the one deliberately laid out.
-        save_menu = win32gui.CreatePopupMenu()
-        add("Every display", lambda: self._save_arrangement(), into=save_menu)
-        sep(into=save_menu)
-        for mon in self.guard.monitors:
-            add(mon.label(),
-                (lambda h: lambda: self._save_arrangement(h))(mon.hwid),
-                into=save_menu)
-        add_sub("Save this arrangement as...", save_menu, into=more)
-
-        if modes:
-            apply_menu = win32gui.CreatePopupMenu()
-            setup_menu = win32gui.CreatePopupMenu()
-            for name in sorted(modes):
-                add(name,
-                    (lambda n: lambda: self._apply_arrangement(mode=n))(name),
-                    into=apply_menu)
-                add(name,
-                    (lambda n: lambda: self._apply_arrangement(
-                        mode=n, launch=True))(name),
-                    into=setup_menu)
-            add_sub("Arrange windows like...", apply_menu, into=more)
-            # Separate from plain arranging, because this starts programs and
-            # that should never happen as a side effect of tidying a screen.
-            add_sub("Set up like..., opening what is missing", setup_menu,
-                    into=more)
-
-        add("Undo that arrangement", self._undo_arrangement,
-            enabled=bool(self._load_arrangement(ARRANGEMENT_UNDO_PATH)),
-            into=more)
         add("Auto-restore window positions", self._toggle_restore_windows,
             checked=self.cfg.get("restore_windows", True), into=more)
         add("Auto-restore desktop icons", self._toggle_restore_icons,
