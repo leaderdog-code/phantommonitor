@@ -164,9 +164,10 @@ again.
 
 The wait matters. An amp keeps serving the last screen's details for a while
 after it goes dark, so looking straight away shows no change and tells you
-nothing. How long varies by hardware and neither amp here has been timed
-properly, so if the first re-check shows nothing, leave it five minutes and look
-once more before concluding there is no signal.
+nothing. On the Denon AVR-790 it took **about a minute** from pressing the
+monitor's power button to blocking resuming. Other hardware may take longer, so
+if the first re-check shows nothing, leave it five minutes and look once more
+before concluding there is no signal.
 
 ## Dedicating a screen to one app
 
