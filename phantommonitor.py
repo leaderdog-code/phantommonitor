@@ -1058,6 +1058,13 @@ def cursor_lock_rect(rect, monitors, blocked, app, lock_apps,
     # The desktop itself is worse: Explorer owns a window the size of the
     # screen, so clicking the wallpaper would trap the mouse on that
     # monitor. Real full-screen covers the taskbar too and has no frame.
+    name = (app or "").strip().lower()
+    if name and name in set(a.strip().lower() for a in lock_apps or () if a):
+        # Named explicitly, so hold it whatever shape it is. This has to come
+        # before the tests below or it is not really "explicit": a racing sim
+        # spanning three screens looks exactly like a screen-spanning overlay,
+        # and naming it is the only way to tell us apart from one.
+        return host.rect
     if not borderless or not covers_monitor(rect, host, fraction=0.995):
         return None
     # A window covering several displays at once is not a game, it is an
@@ -1067,9 +1074,6 @@ def cursor_lock_rect(rect, monitors, blocked, app, lock_apps,
     # user was actually pointing at.
     if spans_displays(rect, monitors) > 1:
         return None
-    name = (app or "").strip().lower()
-    if name and name in set(a.strip().lower() for a in lock_apps or () if a):
-        return host.rect          # named explicitly, always hold it
     if name and name in set(a.strip().lower() for a in never_lock or () if a):
         return None               # named as never, e.g. full-screen RDP
     return host.rect if lock_fullscreen else None

@@ -66,8 +66,8 @@ depends on which rule suits your hardware — see [Block rules](#block-rules).
 
 ## Block rules
 
-A rule is a hardware id, optionally qualified by size. `--list` prints the ids
-of your displays.
+A rule is a hardware id, optionally qualified by size. Settings shows the id
+beside each display, and **Diagnose my displays...** lists them too.
 
 | Rule | Blocks that display |
 |---|---|
