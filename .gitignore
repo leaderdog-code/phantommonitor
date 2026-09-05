@@ -15,6 +15,7 @@ icons_backup*.json
 # Machine-specific settings (hardware ids, editor path). config.example.json is
 # the template; PhantomMonitor writes config.json itself on first run.
 config.json
+arrangement.json
 config.json.bak
 config.json.*
 
@@ -25,6 +26,7 @@ build/*.spec
 
 # Throwaway diagnostics with this machine's hardware ids baked in
 watch_amp.py
+time_it.py
 
 # Release bodies are drafted locally and live on the release itself
 RELEASE_NOTES_*.md

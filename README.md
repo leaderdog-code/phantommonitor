@@ -109,6 +109,28 @@ on a display change and never restores it either.
 Both are on by default. **Settings and more ▸ Layouts** has the switches, plus
 manual save and restore.
 
+## Saving an arrangement
+
+Set your screens up the way you like — chat down one side, a couple of browser
+windows filling the rest, whatever suits — then **Settings and more ▸ Save this
+arrangement**. Later, **Arrange windows like that again** puts it back.
+
+It saves *shapes per app*, not particular windows. "Two Brave windows go in
+these two rectangles" rather than "this exact window goes here". Which browser
+lands in which slot is chance, and does not matter: you navigate to what you
+want in each one anyway. It means the arrangement survives a reboot, where
+window handles do not, and it does not break when a page title changes.
+
+- Extra windows beyond the slots are left where they are
+- Missing apps just leave their slot empty
+- Positions are relative to each display, so moving a monitor does not spoil it
+- If a display from the saved arrangement is not attached, its windows are
+  skipped
+
+This is separate from the automatic restore, which lives in memory and fixes
+what a display change moved. The saved arrangement is on disk and is yours to
+apply whenever.
+
 ## Block rules
 
 A rule is a hardware id, optionally qualified by size. Settings shows the id

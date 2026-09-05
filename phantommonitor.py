@@ -67,6 +67,7 @@ CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
 LOG_DIR = os.path.join(DATA_DIR, "logs")
 LOG_PATH = os.path.join(LOG_DIR, "phantommonitor.log")
 ICON_LAYOUT_PATH = os.path.join(DATA_DIR, "icon_layouts.json")
+ARRANGEMENT_PATH = os.path.join(DATA_DIR, "arrangement.json")
 PROJECT_URL = "https://github.com/leaderdog-code/phantommonitor"
 RELEASES_URL = PROJECT_URL + "/releases"
 LATEST_API = "https://api.github.com/repos/leaderdog-code/phantommonitor/releases/latest"
@@ -838,6 +839,32 @@ def offset_onto(rel, mon):
     x = min(max(left + dx, left), right - width)
     y = min(max(top + dy, top), bottom - height)
     return x, y, width, height
+
+
+def fill_slots(slots, windows):
+    """Pair saved slots with the windows that exist now, by app.
+
+    Slots are per-application and interchangeable: a layout says "two Brave
+    windows go in these two rectangles", not "this particular window goes
+    here". Handles do not survive a reboot and titles change as you browse, so
+    identifying a specific window is both hard and pointless - the arrangement
+    is what is being restored, and whatever is in each window is the user's
+    business.
+
+    Extra windows are left alone. Empty slots stay empty.
+    """
+    by_app = {}
+    for hwnd, app in windows:
+        by_app.setdefault(app, []).append(hwnd)
+    pairs, used = [], {}
+    for slot in slots:
+        app = (slot.get("app") or "").lower()
+        n = used.get(app, 0)
+        available = by_app.get(app) or []
+        if n < len(available):
+            pairs.append((available[n], slot))
+            used[app] = n + 1
+    return pairs
 
 
 def parse_block_spec(spec):
@@ -2590,6 +2617,10 @@ class TrayApp:
         sep(into=more)
         add("Save window + icon layout now", self._snapshot_all, into=more)
         add("Restore window + icon layout", self._restore_all, into=more)
+        sep(into=more)
+        add("Save this arrangement", self._save_arrangement, into=more)
+        add("Arrange windows like that again", self._apply_arrangement,
+            into=more)
         add("Auto-restore window positions", self._toggle_restore_windows,
             checked=self.cfg.get("restore_windows", True), into=more)
         add("Auto-restore desktop icons", self._toggle_restore_icons,
@@ -2811,6 +2842,72 @@ class TrayApp:
             if hwid is not None:
                 self.guard.place_assigned(hwnd)
         return action
+
+    # -- saved arrangements
+    #
+    # Different from the window snapshot, which is in memory and answers "what
+    # did that display change just move?". This is on disk and answers "put my
+    # screen back the way I like it", which is a thing you want after a reboot,
+    # when the snapshot is long gone.
+    def _save_arrangement(self):
+        slots = []
+        hwnds = []
+        win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
+        for hwnd in hwnds:
+            if not is_manageable(hwnd, self.cfg):
+                continue
+            try:
+                rect = win32gui.GetWindowRect(hwnd)
+                mon = monitor_of_rect(rect, self.guard.monitors,
+                                      require_overlap=True)
+                app = process_name(hwnd)
+            except Exception:
+                continue
+            if mon is None or not app:
+                continue
+            slots.append({"app": app, "hwid": mon.hwid,
+                          "rel": list(offset_in(rect, mon))})
+        if not slots:
+            log.info("nothing to save")
+            return
+        try:
+            with open(ARRANGEMENT_PATH, "w", encoding="utf-8") as handle:
+                json.dump({"slots": slots}, handle, indent=2)
+        except OSError as exc:
+            log.error("could not save the arrangement: %s", exc)
+            return
+        log.info("saved an arrangement of %d window(s)", len(slots))
+
+    def _apply_arrangement(self):
+        try:
+            with open(ARRANGEMENT_PATH, "r", encoding="utf-8") as handle:
+                slots = (json.load(handle) or {}).get("slots") or []
+        except (OSError, ValueError):
+            log.info("no saved arrangement yet - use Save first")
+            return
+        windows = []
+        hwnds = []
+        win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
+        for hwnd in hwnds:
+            if is_manageable(hwnd, self.cfg):
+                try:
+                    windows.append((hwnd, process_name(hwnd)))
+                except Exception:
+                    continue
+        placed = 0
+        for hwnd, slot in fill_slots(slots, windows):
+            mon = self.guard.by_hwid(slot.get("hwid"))
+            if mon is None:
+                continue            # that display is not here today
+            try:
+                x, y, width, height = offset_onto(slot["rel"], mon)
+                win32gui.SetWindowPos(hwnd, 0, x, y, width, height,
+                                      win32con.SWP_NOZORDER
+                                      | win32con.SWP_NOACTIVATE)
+                placed += 1
+            except Exception:
+                continue
+        log.info("arranged %d window(s) from the saved layout", placed)
 
     def _show_diagnostics(self):
         """Write the report, put it on the clipboard, and open it.

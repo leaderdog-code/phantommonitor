@@ -579,6 +579,29 @@ check("a single-display game still holds the pointer",
       mg.cursor_lock_rect(ONE.rect, ALL, [], "somegame.exe",
                           [], [], True, True) == ONE.rect)
 
+# A saved arrangement is slots per application, deliberately interchangeable:
+# "two Brave windows go in these two rectangles", not "this window goes here".
+# Handles die at reboot and titles change as you browse, and which browser is
+# in which slot does not matter - you navigate to what you want anyway.
+SLOTS = [{"app": "brave.exe", "rel": [0, 0, 800, 600]},
+         {"app": "brave.exe", "rel": [800, 0, 600, 900]},
+         {"app": "discord.exe", "rel": [0, 600, 800, 400]}]
+check("two windows of one app fill its two slots",
+      len(mg.fill_slots(SLOTS, [(1, "brave.exe"), (2, "brave.exe"),
+                                (3, "discord.exe")])) == 3)
+check("a third window of that app is left alone",
+      len(mg.fill_slots(SLOTS, [(1, "brave.exe"), (2, "brave.exe"),
+                                (9, "brave.exe")])) == 2)
+check("a missing app just leaves its slot empty",
+      len(mg.fill_slots(SLOTS, [(1, "brave.exe")])) == 1)
+check("each window is used once",
+      len(set(h for h, _ in mg.fill_slots(
+          SLOTS, [(1, "brave.exe"), (2, "brave.exe")]))) == 2)
+check("an app with no slot is not touched",
+      mg.fill_slots(SLOTS, [(7, "notepad.exe")]) == [])
+check("no windows at all is not an error",
+      mg.fill_slots(SLOTS, []) == [])
+
 # A pinned position is stored as an offset within its display, not as a desktop
 # coordinate. The same monitor moves around - dragged to the other side in
 # Display Settings, plugged into another port, made primary - and every absolute
