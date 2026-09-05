@@ -2080,6 +2080,7 @@ class TrayApp:
         if not self.cfg.get("restore_windows", True) or not self.window_snapshot:
             return 0
         restored = skipped = 0
+        names = []
         for hwnd, placement in self.window_snapshot.items():
             try:
                 if not window_displaced(hwnd, placement, self.cfg):
@@ -2100,11 +2101,20 @@ class TrayApp:
                               placement[4])
                 win32gui.SetWindowPlacement(hwnd, wanted)
                 restored += 1
+                # Name them. A bare count cannot answer "why did my full-screen
+                # session get put back in a window", which is the question a
+                # restore most often raises.
+                try:
+                    names.append("%s (%s)" % (shorten(title_of(hwnd), 30),
+                                              process_name(hwnd)))
+                except Exception:
+                    pass
             except Exception:
                 continue
         if restored or skipped:
-            log.info("put back %d displaced window(s) [%s]%s", restored, reason,
-                     "; %d skipped, their old spot is gone" % skipped if skipped else "")
+            log.info("put back %d displaced window(s) [%s]%s%s", restored, reason,
+                     "; %d skipped, their old spot is gone" % skipped if skipped else "",
+                     ": " + ", ".join(names) if names else "")
         return restored
 
     # -- desktop icon layouts
