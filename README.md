@@ -57,25 +57,33 @@ depends on which rule suits your hardware — see [Block rules](#block-rules).
 
 ## Block rules
 
-| Rule | Meaning |
+A rule names a hardware id, and blocks a display **whenever that id is the one
+Windows is reporting**.
+
+| Rule | Blocks that display |
 |---|---|
-| `DON0015` | Always block it |
-| `DON0015@800x600` | Block only at that exact size |
-| `DON0015@<1280x720` | Block only while smaller than that |
+| `DON0015` | whenever this id is present |
+| `DON0015@800x600` | only while it is exactly this size |
+| `DON0015@<1280x720` | only while it has fewer pixels than this |
 
-Use the plain form for a screen you are reserving, and for an amp that changes
-its hardware id when a screen wakes up behind it.
+"Whenever the id is present" is the useful part, and it is why the plain form is
+usually enough. An AV receiver is an HDMI repeater: it reads the EDID of
+whatever is downstream and presents that upstream, so with a screen awake behind
+it Windows sees *the screen's* id, not the amp's. The rule stops matching on its
+own, and that display becomes an ordinary monitor.
 
-The `<` form is for the case where the phantom sits at a small resolution and a
-real screen would be larger — often because you set the amp's display small on
-purpose. It then stops matching by itself when a real screen appears. Check
-what your amp actually reports before relying on it: both tested here advertise
-up to 1920x1080 with nothing attached, so size alone would not have caught
-either.
+Switch the screen off and the amp eventually goes back to advertising itself.
+Its id returns, the rule matches again, and blocking resumes without you
+touching anything.
 
-Which form works depends on your amp. Run `--diag`, switch the screen behind it
-off, **wait several minutes**, and run it again. Amps hold the last EDID for
-some minutes before falling back, so an immediate second look shows no change
+Use `@` forms only when the id alone will not do — a display you are reserving
+that must stay blocked with a screen attached, or an amp that reports the same
+id either way. The `<` form compares total pixels, so it is not fooled by a
+monitor turned on its side.
+
+Check yours rather than assuming. Run `--diag` with a screen awake behind the
+amp, switch that screen off, **wait several minutes**, and run it again. Amps
+hold the last EDID for some minutes, so an immediate second look shows no change
 and tells you nothing.
 
 ## Dedicating a screen to one app

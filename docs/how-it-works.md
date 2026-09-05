@@ -39,31 +39,32 @@ blocked. It corrects itself.
 How long is firmware's decision. It is not specified anywhere, and receivers
 differ. Measure your own with `--diag` rather than trusting a number.
 
-## Two shapes of receiver
+## What the amp does when a screen wakes up
 
-| Behaviour | What changes when a screen is awake behind it | Rule |
-|---|---|---|
-| Passes the screen's EDID through | the hardware id | plain `YMH3148` |
-| Keeps its own id | nothing automatic — see below | tick it, or a size rule |
+Passing the downstream EDID upstream is what a repeater is *specified* to do,
+so expect it to be the normal case rather than a quirk of one brand.
 
-Tested here, both on native HDMI ports:
+Measured on a **Yamaha HTR-4063**, native HDMI: with a Toshiba awake behind it
+Windows reports `TSB0210`; `YMH3148` appears only once the amp lets go. The
+resolution was identical in both states. So the id is the signal, and a plain
+rule on the amp's own id stands itself down when a screen wakes up.
 
-- **Yamaha HTR-4063** passes the downstream EDID through. With a Toshiba behind
-  it Windows sees `TSB0210`; `YMH3148` appears only once it lets go. Identity is
-  the signal, and a plain rule on the amp's own id is automatic.
-- **Denon** keeps `DON0015` whatever is behind it, so nothing in its identity
-  changes.
+A **Denon** was also tested, but only ever with nothing behind it, where it
+reports `DON0015`. Earlier notes here said it "keeps its own identity whatever
+is behind it" — that was never actually tested with a screen attached, and given
+what a repeater is for, it is more likely to pass the screen's EDID through in
+the same way. Treat the Yamaha result as the expected behaviour and check your
+own.
 
 **Neither advertises a small "fallback" resolution.** Both offer modes up to
-1920x1080 with nothing attached. An earlier version of these notes claimed the
-Denon dropped to 800x600 on its own; it does not. That machine simply had the
-amp's display *set* to 800x600 by hand, and Windows was restoring the chosen
-mode.
+1920x1080 with nothing attached. Earlier notes claimed the Denon dropped to
+800x600 on its own; it does not. That machine simply had the amp's display *set*
+to 800x600 by hand, and Windows was restoring the chosen mode.
 
-That matters for rule choice. A size rule works only if the phantom is sitting
-at a resolution smaller than a real screen would use — which usually means you
-set it that way deliberately. It is a perfectly good technique, but it is your
-configuration doing the work, not the amp announcing itself.
+So size is a poor signal and identity is a good one. A size rule works only when
+the phantom happens to sit at a resolution smaller than a real screen would use
+— usually because you set it that way. Useful, but it is your configuration
+doing the work, not the amp announcing itself.
 
 `--diag` tells you which you have. Compare it with a screen awake behind the
 amp, and again several minutes after switching that screen off.
