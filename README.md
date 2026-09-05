@@ -75,19 +75,28 @@ depends on which rule suits your hardware — see [Block rules](#block-rules).
 - Fixes minimized windows whose restore position is on a blocked display
 - Pins named apps to a display, so one screen can be dedicated to them
 
-## Games that scatter your windows
+## Windows that get scattered
 
 You do not need a phantom display to want this part.
 
-Sometimes a full-screen game sweeps everything off your other monitors onto the
-primary and leaves it there when you quit. A game taking exclusive full screen
+**The commonest cause is sleep.** The PC sleeps, the displays drop away, and on
+waking Windows has crammed everything onto the primary — the classic being the
+terminals you had arranged across three screens, back on monitor 1 every single
+morning. Unplugging a monitor, switching one off, and RDP sessions
+connecting or disconnecting all do the same thing.
+
+Sometimes a full-screen game does it too: it sweeps everything off your other
+monitors onto the primary and leaves it there when you quit. A game taking exclusive full screen
 changes the display configuration and changes it straight back, and Windows can
 rearrange your desktop in between.
 
-It does not happen every time or on every setup — the same game on the same
-machine scattered windows once here and left them alone an hour later. Mixed
-monitor sizes and anything else that disturbs the display arrangement seem to
-make it likelier.
+That one is less predictable — the same game on the same machine scattered
+windows once here and left them alone an hour later. Sleep is the dependable
+case.
+
+One limit worth knowing: the snapshot lives in memory, so it survives sleep,
+display changes and unplugging, but not a reboot. After restarting, arrange
+things once and it learns from there.
 
 Phantom Monitor takes a snapshot of where every window is, notices the display
 event, waits for Windows and the game to finish shuffling, and puts back
