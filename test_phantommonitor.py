@@ -579,6 +579,28 @@ check("a single-display game still holds the pointer",
       mg.cursor_lock_rect(ONE.rect, ALL, [], "somegame.exe",
                           [], [], True, True) == ONE.rect)
 
+# The rule suggester. Sampling at the wrong moment - with a screen awake behind
+# the amp - is how someone ends up with a manual rule when an automatic one was
+# available, so that case has to say so rather than just recommending the
+# fallback.
+check("an interlaced amp is told to use @interlaced",
+      mg.suggest_rule("ABC1234", "AMP", True, (1920, 1080, True),
+                      1920, 1080)[0] == "ABC1234@interlaced")
+check("a small phantom is told to use a size rule",
+      mg.suggest_rule("ABC1234", "AMP", True, (1920, 1080, False),
+                      800, 600)[0] == "ABC1234@<1280x720")
+check("a progressive amp falls back to a plain rule",
+      mg.suggest_rule("ABC1234", "AMP", True, (1920, 1080, False),
+                      1920, 1080)[0] == "ABC1234")
+check("and is told to look again with the screen off",
+      "interlaced" in mg.suggest_rule("ABC1234", "AMP", True,
+                                      (1920, 1080, False), 1920, 1080)[1])
+check("a real display gets no suggestion at all",
+      mg.suggest_rule("GSM5BBF", "LG", False, (3840, 2160, False),
+                      3840, 2160) == (None, None))
+check("an unreadable EDID still yields advice",
+      mg.suggest_rule("ABC1234", "AMP", True, None, 1920, 1080)[0] == "ABC1234")
+
 # Some receivers advertise an interlaced preferred timing with nothing behind
 # them and a progressive one once a screen wakes up, while Windows reports the
 # same resolution for both - so only the EDID shows the difference.

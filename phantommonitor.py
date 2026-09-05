@@ -769,6 +769,17 @@ def suggest_rule(hwid, name, is_av, preferred, width, height):
         return ("%s@<1280x720" % hwid,
                 "it is sitting at a small resolution, so a real screen behind "
                 "it would stand the rule down")
+    if preferred and not preferred[2]:
+        # Progressive right now. That may be because a screen is awake behind
+        # it, in which case the interesting state has not been sampled yet -
+        # checking at the wrong moment is exactly how someone ends up with a
+        # manual rule when an automatic one was available.
+        return (hwid,
+                "nothing distinguishes it from a real display RIGHT NOW. If a "
+                "screen is awake behind it, switch that screen off, wait a few "
+                "minutes and look again - if it then asks for an interlaced "
+                "mode, use %s@interlaced instead. Otherwise block it outright "
+                "and untick it when you want the screen" % hwid)
     return (hwid,
             "nothing here distinguishes it from a real display, so block it "
             "outright and untick it when you want to use a screen behind it")
