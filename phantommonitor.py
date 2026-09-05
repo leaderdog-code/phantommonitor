@@ -236,11 +236,20 @@ log = logging.getLogger(APP_NAME)
 
 # --- setup -------------------------------------------------------------------
 
-def setup_logging(level):
+def setup_logging(level, path=None):
+    """Set up logging. PATH lets a child process use a file of its own.
+
+    The settings window runs as a second process of this same script, so
+    without that it would open the same rotating log. Two processes holding one
+    rotating handler collide the moment it rolls over: the rename fails with a
+    sharing violation and BOTH of them spew tracebacks on every write
+    thereafter. It has to be a separate file.
+    """
     os.makedirs(LOG_DIR, exist_ok=True)
     log.setLevel(getattr(logging, str(level).upper(), logging.INFO))
     fmt = logging.Formatter("%(asctime)s %(levelname)-7s %(message)s", "%Y-%m-%d %H:%M:%S")
-    handler = RotatingFileHandler(LOG_PATH, maxBytes=512000, backupCount=3, encoding="utf-8")
+    handler = RotatingFileHandler(path or LOG_PATH, maxBytes=512000,
+                                  backupCount=3, encoding="utf-8")
     handler.setFormatter(fmt)
     log.addHandler(handler)
     if sys.stdout is not None:
@@ -693,16 +702,67 @@ def looks_like_av_device(hwid, name, declared=(), denied=()):
     return None
 
 
+_preferred_cache = {}
+
+
+def edid_preferred(hwid):
+    """(width, height, interlaced) from the display's preferred timing, or None.
+
+    This is what the display *asks for*, which is not the same as what Windows
+    is set to - Windows restores whatever mode was last chosen for a given
+    arrangement, and mistaking one for the other sent this project down a long
+    wrong path.
+
+    Windows shows the same value as "(Recommended)" in the resolution list.
+
+    Cached, because the sweep runs every couple of seconds and this reads the
+    registry. Cleared whenever the display topology changes.
+    """
+    if hwid in _preferred_cache:
+        return _preferred_cache[hwid]
+    result = None
+    try:
+        base = r"SYSTEM\CurrentControlSet\Enum\DISPLAY"
+        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base + "\\" + hwid)
+        index = 0
+        while result is None:
+            try:
+                inst = winreg.EnumKey(key, index)
+            except OSError:
+                break
+            try:
+                params = winreg.OpenKey(
+                    winreg.HKEY_LOCAL_MACHINE,
+                    "%s\%s\%s\Device Parameters" % (base, hwid, inst))
+                edid = bytes(winreg.QueryValueEx(params, "EDID")[0])
+                d = edid[54:72]                      # first detailed timing
+                width = d[2] | ((d[4] & 0xF0) << 4)
+                lines = d[5] | ((d[7] & 0xF0) << 4)
+                interlaced = bool(d[17] & 0x80)
+                # An interlaced descriptor counts lines per field, so the frame
+                # is twice that.
+                result = (width, lines * (2 if interlaced else 1), interlaced)
+            except (OSError, IndexError):
+                index += 1
+    except OSError:
+        result = None
+    _preferred_cache[hwid] = result
+    return result
+
+
 def parse_block_spec(spec):
-    """Parse a block rule into (hwid, size, smaller_than).
+    """Parse a block rule into (hwid, size, smaller_than, interlaced_only).
 
         'DON0015'             always block
         'DON0015@800x600'     block only at exactly that size
         'DON0015@<1280x720'   block only while smaller than that
+        'DON0015@interlaced'  block only while it asks for an interlaced mode
     """
     hwid, _, mode = str(spec).partition("@")
-    size, smaller = None, False
+    size, smaller, interlaced = None, False, False
     mode = mode.strip().lower()
+    if mode == "interlaced":
+        return hwid.strip(), None, False, True
     if mode:
         if mode.startswith("<"):
             smaller, mode = True, mode[1:]
@@ -712,7 +772,7 @@ def parse_block_spec(spec):
         except ValueError:
             log.warning("block rule %r has a bad size; matching on id alone", spec)
             smaller = False
-    return hwid.strip(), size, smaller
+    return hwid.strip(), size, smaller, interlaced
 
 
 def monitor_matches_block(mon, spec):
@@ -731,9 +791,16 @@ def monitor_matches_block(mon, spec):
     Prefer the '<' form over an exact size: it survives the mode being changed
     by hand, and small phantoms turn up at 640x480, 800x600 and 1024x768 alike.
     """
-    hwid, size, smaller = parse_block_spec(spec)
+    hwid, size, smaller, interlaced_only = parse_block_spec(spec)
     if mon.hwid != hwid:
         return False
+    if interlaced_only:
+        # Some receivers advertise an interlaced preferred timing with nothing
+        # behind them and a progressive one once a screen wakes up, while
+        # Windows reports the same resolution for both - so the size forms are
+        # blind to it and only the EDID shows the difference.
+        pref = edid_preferred(hwid)
+        return bool(pref and pref[2])
     if size is None:
         return True
     width = mon.rect[2] - mon.rect[0]
@@ -1168,6 +1235,7 @@ class Guard:
         self.refresh_monitors()
 
     def refresh_monitors(self):
+        _preferred_cache.clear()   # EDIDs change with the topology
         self.monitors = enum_monitors()
         log.info("displays: %s", " | ".join(m.label() for m in self.monitors))
         # An EDID id identifies the MODEL, not the individual panel, so two
@@ -2857,7 +2925,9 @@ def single_instance():
 def main():
     args = set(a.lower() for a in sys.argv[1:])
     cfg = load_config()
-    setup_logging(cfg.get("log_level", "INFO"))
+    setup_logging(cfg.get("log_level", "INFO"),
+                  os.path.join(LOG_DIR, "settings.log")
+                  if "--settings" in args else None)
     awareness = set_dpi_awareness()
 
     if "--diag" in args:

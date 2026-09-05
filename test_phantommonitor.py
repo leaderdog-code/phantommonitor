@@ -579,6 +579,23 @@ check("a single-display game still holds the pointer",
       mg.cursor_lock_rect(ONE.rect, ALL, [], "somegame.exe",
                           [], [], True, True) == ONE.rect)
 
+# Some receivers advertise an interlaced preferred timing with nothing behind
+# them and a progressive one once a screen wakes up, while Windows reports the
+# same resolution for both - so only the EDID shows the difference.
+check("the interlaced qualifier parses",
+      mg.parse_block_spec("ABC1234@interlaced") == ("ABC1234", None, False, True))
+check("a plain rule is not an interlace rule",
+      mg.parse_block_spec("ABC1234")[3] is False)
+check("a size rule is not an interlace rule",
+      mg.parse_block_spec("ABC1234@<1280x720")[3] is False)
+check("size rules still parse",
+      mg.parse_block_spec("ABC1234@800x600") == ("ABC1234", (800, 600), False, False))
+check("preferred timing reads back for a real display",
+      (lambda p: p is not None and p[0] > 0 and p[1] > 0)(
+          mg.edid_preferred(next(m for m in guard.monitors if m.primary).hwid)))
+check("an unknown hardware id has no preferred timing",
+      mg.edid_preferred("NOSUCH9") is None)
+
 # A cursor clip outlives whatever set it. A game exits with the pointer still
 # confined to where its window was, and deferring to that seals the user inside
 # a rectangle with nothing in it - unable to reach the tray icon that would
