@@ -5,9 +5,9 @@ other HDMI device creates in Windows.
 
 ## The problem
 
-Send HDMI to an amp for sound and it reports itself to Windows as a display,
-usually 800x600. Windows treats that as real desktop space and puts windows
-there. They are invisible and unreachable.
+Send HDMI to an amp for sound and it reports itself to Windows as a display.
+Windows treats that as real desktop space and puts windows there. They are
+invisible and unreachable.
 
 It happens two ways:
 
@@ -58,9 +58,15 @@ reboots, cable swaps and port changes.
 | `DON0015@800x600` | Block only at that exact size |
 | `DON0015@<1280x720` | Block only while smaller than that |
 
-Use the plain form for a screen you are reserving. Use the `<` form for an amp
-that drops to a small fallback EDID when nothing is awake behind it — then the
-rule stops matching by itself when you connect a real screen.
+Use the plain form for a screen you are reserving, and for an amp that changes
+its hardware id when a screen wakes up behind it.
+
+The `<` form is for the case where the phantom sits at a small resolution and a
+real screen would be larger — often because you set the amp's display small on
+purpose. It then stops matching by itself when a real screen appears. Check
+what your amp actually reports before relying on it: both tested here advertise
+up to 1920x1080 with nothing attached, so size alone would not have caught
+either.
 
 Which form works depends on your amp. Run `--diag`, switch the screen behind it
 off, **wait several minutes**, and run it again. Amps hold the last EDID for

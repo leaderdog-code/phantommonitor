@@ -44,16 +44,26 @@ differ. Measure your own with `--diag` rather than trusting a number.
 | Behaviour | What changes when a screen is awake behind it | Rule |
 |---|---|---|
 | Passes the screen's EDID through | the hardware id | plain `YMH3148` |
-| Keeps its own EDID, changes modes | the resolution | `DON0015@<1280x720` |
+| Keeps its own id | nothing automatic — see below | tick it, or a size rule |
 
 Tested here, both on native HDMI ports:
 
-- **Denon** keeps `DON0015` whatever is behind it and falls back to 800x600.
-  Resolution is the signal.
-- **Yamaha HTR-4063** passes the downstream EDID through, so with a Toshiba
-  behind it Windows sees `TSB0210`, and `YMH3148` only once it lets go. It also
-  advertises 1920x1080 with nothing attached, so no size rule would ever have
-  caught it. Identity is the signal.
+- **Yamaha HTR-4063** passes the downstream EDID through. With a Toshiba behind
+  it Windows sees `TSB0210`; `YMH3148` appears only once it lets go. Identity is
+  the signal, and a plain rule on the amp's own id is automatic.
+- **Denon** keeps `DON0015` whatever is behind it, so nothing in its identity
+  changes.
+
+**Neither advertises a small "fallback" resolution.** Both offer modes up to
+1920x1080 with nothing attached. An earlier version of these notes claimed the
+Denon dropped to 800x600 on its own; it does not. That machine simply had the
+amp's display *set* to 800x600 by hand, and Windows was restoring the chosen
+mode.
+
+That matters for rule choice. A size rule works only if the phantom is sitting
+at a resolution smaller than a real screen would use — which usually means you
+set it that way deliberately. It is a perfectly good technique, but it is your
+configuration doing the work, not the amp announcing itself.
 
 `--diag` tells you which you have. Compare it with a screen awake behind the
 amp, and again several minutes after switching that screen off.

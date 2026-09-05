@@ -718,15 +718,18 @@ def parse_block_spec(spec):
 def monitor_matches_block(mon, spec):
     """Does this monitor match a block rule?
 
-    The size qualifier exists because an AV receiver with nothing attached
-    advertises its own small fallback EDID - that tiny resolution IS the
-    "no display here" signal. Once a real screen is plugged in the receiver
-    reports a real resolution (or passes the screen's own EDID through), the
-    rule stops matching, and the guard steps aside without being asked.
+    The size qualifier is for when the phantom sits at a small resolution and a
+    real screen behind it would be larger. The rule then stops matching once a
+    screen appears, and the guard steps aside without being asked.
 
-    Prefer the '<' form: fallback EDIDs vary between 640x480, 800x600 and
-    1024x768, and an exact match would also break if the mode were ever changed
-    by hand.
+    Do not assume an amp announces itself by going small. Both receivers tested
+    here advertise modes up to 1920x1080 with nothing attached; the small
+    resolution on the test machine was one the user had chosen. Where the
+    phantom does sit small, this works well - but it is usually the setup doing
+    that, not the hardware.
+
+    Prefer the '<' form over an exact size: it survives the mode being changed
+    by hand, and small phantoms turn up at 640x480, 800x600 and 1024x768 alike.
     """
     hwid, size, smaller = parse_block_spec(spec)
     if mon.hwid != hwid:
@@ -737,11 +740,10 @@ def monitor_matches_block(mon, spec):
     height = mon.rect[3] - mon.rect[1]
     if smaller:
         # Compare AREA, not dimensions. Requiring both to be smaller would miss
-        # a 1024x768 fallback, which is taller than 720; requiring either would
-        # falsely catch a monitor turned on its side, where a 1080x1920 portrait
-        # panel is narrower than 1280. Area is right for both: every fallback
-        # EDID is under 1280x720 worth of pixels and every real display, rotated
-        # or not, is over it.
+        # 1024x768, which is taller than 720; requiring either would falsely
+        # catch a monitor turned on its side, where a 1080x1920 portrait panel
+        # is narrower than 1280. Area handles both: a small phantom is under
+        # 1280x720 worth of pixels and a real display, rotated or not, is over.
         return width * height < size[0] * size[1]
     return (width, height) == size
 
