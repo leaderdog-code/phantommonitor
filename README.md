@@ -111,9 +111,16 @@ manual save and restore.
 
 ## Saving an arrangement
 
-Set your screens up the way you like — chat down one side, a couple of browser
-windows filling the rest, whatever suits — then **Settings and more ▸ Save this
-arrangement**. Later, **Arrange windows like that again** puts it back.
+Set a screen up the way you like — chat down one side, a couple of browser
+windows filling the rest — then **Settings and more ▸ Save this arrangement**
+and pick that display. Later, **Arrange windows like that again ▸ that display**
+puts it back.
+
+**Do it per display.** A primary screen is usually a free-for-all nobody wants
+tidied, while a side screen is deliberately laid out. Saving one display leaves
+the others' saved arrangements untouched, and applying one moves only its own
+windows. There is an *Every display* option in both menus if you do want the
+lot.
 
 It saves *shapes per app*, not particular windows. "Two Brave windows go in
 these two rectangles" rather than "this exact window goes here". Which browser

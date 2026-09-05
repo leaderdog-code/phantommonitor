@@ -2618,9 +2618,25 @@ class TrayApp:
         add("Save window + icon layout now", self._snapshot_all, into=more)
         add("Restore window + icon layout", self._restore_all, into=more)
         sep(into=more)
-        add("Save this arrangement", self._save_arrangement, into=more)
-        add("Arrange windows like that again", self._apply_arrangement,
-            into=more)
+        saved_hwids = set(x.get("hwid") for x in self._load_arrangement())
+        save_menu = win32gui.CreatePopupMenu()
+        add("Every display", lambda: self._save_arrangement(), into=save_menu)
+        sep(into=save_menu)
+        for mon in self.guard.monitors:
+            add(mon.label(),
+                (lambda h: lambda: self._save_arrangement(h))(mon.hwid),
+                into=save_menu)
+        add_sub("Save this arrangement", save_menu, into=more)
+
+        apply_menu = win32gui.CreatePopupMenu()
+        add("Every display", lambda: self._apply_arrangement(),
+            enabled=bool(saved_hwids), into=apply_menu)
+        sep(into=apply_menu)
+        for mon in self.guard.monitors:
+            add(mon.label(),
+                (lambda h: lambda: self._apply_arrangement(h))(mon.hwid),
+                enabled=mon.hwid in saved_hwids, into=apply_menu)
+        add_sub("Arrange windows like that again", apply_menu, into=more)
         add("Auto-restore window positions", self._toggle_restore_windows,
             checked=self.cfg.get("restore_windows", True), into=more)
         add("Auto-restore desktop icons", self._toggle_restore_icons,
@@ -2849,7 +2865,14 @@ class TrayApp:
     # did that display change just move?". This is on disk and answers "put my
     # screen back the way I like it", which is a thing you want after a reboot,
     # when the snapshot is long gone.
-    def _save_arrangement(self):
+    def _load_arrangement(self):
+        try:
+            with open(ARRANGEMENT_PATH, "r", encoding="utf-8") as handle:
+                return (json.load(handle) or {}).get("slots") or []
+        except (OSError, ValueError):
+            return []
+
+    def _save_arrangement(self, only_hwid=None):
         slots = []
         hwnds = []
         win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
@@ -2865,11 +2888,20 @@ class TrayApp:
                 continue
             if mon is None or not app:
                 continue
+            if only_hwid and mon.hwid != only_hwid:
+                continue
             slots.append({"app": app, "hwid": mon.hwid,
                           "rel": list(offset_in(rect, mon))})
         if not slots:
             log.info("nothing to save")
             return
+        if only_hwid:
+            # Saving one screen must not wipe the others. A primary display is
+            # usually a free-for-all nobody wants rearranged, while a side
+            # screen is deliberately laid out - so they are saved separately
+            # and kept separately.
+            slots = [x for x in self._load_arrangement()
+                     if x.get("hwid") != only_hwid] + slots
         try:
             with open(ARRANGEMENT_PATH, "w", encoding="utf-8") as handle:
                 json.dump({"slots": slots}, handle, indent=2)
@@ -2878,13 +2910,13 @@ class TrayApp:
             return
         log.info("saved an arrangement of %d window(s)", len(slots))
 
-    def _apply_arrangement(self):
-        try:
-            with open(ARRANGEMENT_PATH, "r", encoding="utf-8") as handle:
-                slots = (json.load(handle) or {}).get("slots") or []
-        except (OSError, ValueError):
+    def _apply_arrangement(self, only_hwid=None):
+        slots = self._load_arrangement()
+        if not slots:
             log.info("no saved arrangement yet - use Save first")
             return
+        if only_hwid:
+            slots = [x for x in slots if x.get("hwid") == only_hwid]
         windows = []
         hwnds = []
         win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
