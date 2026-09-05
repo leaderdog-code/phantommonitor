@@ -82,11 +82,10 @@ turn off when you want to use the screen. Do not expect an amp to announce
 itself by dropping to a small resolution — the AVR-790 tested here advertises
 1920x1080 whether or not anything is plugged in behind it.
 
-**This is per model, not per brand.** Two units were tested, one of each kind,
-and the one that gives no signal is an older receiver. Newer ones are more
-likely to pass EDID through, since 4K, HDR and eARC all need the amp to
-negotiate with the real display. Do not assume yours behaves like a Denon or a
-Yamaha because of the badge — run `--diag` and look.
+**Do not guess from the badge.** Two amps of the same make can behave
+completely differently, and only two units have been tested in total. Let the
+app work it out instead: right-click the tray icon and choose **Which rule
+should I use?**
 
 **Quick way to tell what your amp is doing.** With nothing plugged in behind it,
 open Windows display settings, select that display and look at the resolution
@@ -96,8 +95,15 @@ attached, the amp is not signalling anything and size alone will not help you.
 
 ### Which rule to use
 
-Run `--diag`. For anything it recognises as an amp it prints what that display
-is *asking for* and suggests a rule. The ladder it works down:
+Right-click the tray icon and choose **Which rule should I use?**. It opens a
+report naming every display, what each one is *asking for*, and the rule to try
+for anything that looks like an amp. It also copies the report to your
+clipboard, ready to paste into an issue.
+
+(The same thing from a terminal, if you prefer:
+`PhantomMonitor.exe --diag`.)
+
+The ladder it works down:
 
 | If the amp | Rule | Automatic? |
 |---|---|---|
@@ -121,9 +127,10 @@ something neither of them does.
 Two units, one household. Nobody is going to buy a dozen receivers across four
 eras to fill this table in, so it grows by report or not at all.
 
-**Please add yours.** Open an issue with `--diag` output twice: once with a
+**Please add yours.** Use **Which rule should I use?** twice — once with a
 screen awake behind the amp, once several minutes after switching that screen
-off. The "it asks for" line is the one that matters. Every model added is one
+off — and paste both into an issue. It copies itself to the clipboard each
+time. The "it asks for" line is the one that matters. Every model added is one
 more that works out of the box for whoever turns up next with the same
 problem.
 
@@ -151,10 +158,10 @@ stop matching.
 monitor turned on its side. Use an exact `@1920x1080` only for a display you are
 reserving that must stay blocked whatever is attached.
 
-Check yours rather than assuming. Run `--diag` with a screen awake behind the
-amp, switch that screen off, **wait several minutes**, and run it again. Amps
-hold the last EDID for some minutes, so an immediate second look shows no change
-and tells you nothing.
+Check yours rather than assuming. Use **Which rule should I use?** with a screen
+awake behind the amp, switch that screen off, **wait several minutes**, and look
+again. Amps hold on to the last screen's details for some minutes, so an
+immediate second look shows no change and tells you nothing.
 
 ## Dedicating a screen to one app
 
@@ -225,5 +232,6 @@ even when something has the pointer trapped.
 
 MIT. Written by Raymond Pierce, co-authored with Claude Opus 5.
 
-Bug reports are welcome, especially `--diag` output from receivers other than
-the Denon and Yamaha tested here.
+Bug reports are welcome, especially reports from receivers other than the two
+tested here — the tray menu's **Which rule should I use?** copies everything
+needed.

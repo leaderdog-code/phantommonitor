@@ -65,10 +65,10 @@ they all do. Where an amp does not, there may be no automatic signal at all, and
 a manual tick is the honest answer.
 
 **Treat both results as per model, not per brand.** These are two units, one of
-each kind, and the one giving no signal is an older receiver. A modern amp has
-to negotiate 4K, HDR and eARC with the real display, which makes pass-through
-far more likely. Nothing here predicts what a different Denon, or a different
-Yamaha, will do.
+each kind, and the one giving no signal is the older of the two. A modern amp
+has to agree 4K, HDR and eARC settings with the real television, which gives it
+more reason to hand the television's details straight through. Nothing here
+predicts what a different Denon, or a different Yamaha, will do.
 
 ### A warning about resolution as a signal
 

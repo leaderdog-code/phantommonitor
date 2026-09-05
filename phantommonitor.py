@@ -21,9 +21,11 @@ import sys
 import threading
 import time
 import winreg
+from io import StringIO
 from logging.handlers import RotatingFileHandler
 
 import win32api
+import win32clipboard
 import win32con
 import win32gui
 import win32process
@@ -2466,6 +2468,7 @@ class TrayApp:
         add("Reload settings", self._reload_config)
         add("Open config folder", lambda: os.startfile(APP_DIR))
         add("View log", lambda: open_text_file(LOG_PATH, editor))
+        add("Which rule should I use?", self._show_diagnostics)
         sep()
         add("Quit " + APP_NAME, self._quit)
 
@@ -2632,6 +2635,36 @@ class TrayApp:
                  "on" if self.cfg["restore_icons"] else "off")
         if self.cfg["restore_icons"]:
             self._snapshot_icons("just enabled")
+
+    def _show_diagnostics(self):
+        """Write the report, put it on the clipboard, and open it.
+
+        The clipboard copy is the point: this exists so somebody can paste it
+        into an issue without opening a terminal, which most people reporting a
+        display problem should not have to do.
+        """
+        try:
+            text = diagnostics_text(self.cfg)
+        except Exception as exc:
+            log.exception("could not build diagnostics")
+            text = "diagnostics failed: %s" % exc
+        path = os.path.join(LOG_DIR, "diagnostics.txt")
+        try:
+            os.makedirs(LOG_DIR, exist_ok=True)
+            with open(path, "w", encoding="utf-8") as handle:
+                handle.write(text)
+        except OSError as exc:
+            log.error("could not write diagnostics: %s", exc)
+            return
+        try:
+            win32clipboard.OpenClipboard()
+            win32clipboard.EmptyClipboard()
+            win32clipboard.SetClipboardText(text, win32clipboard.CF_UNICODETEXT)
+            win32clipboard.CloseClipboard()
+            log.info("diagnostics copied to the clipboard and written to %s", path)
+        except Exception as exc:
+            log.warning("could not copy diagnostics to the clipboard: %s", exc)
+        open_text_file(path, self.cfg.get("editor", ""))
 
     def _toggle_cursor_block(self):
         self.cfg["block_cursor"] = not self.cfg.get("block_cursor", False)
@@ -2865,6 +2898,20 @@ def ddc_power_state(mon):
             dxva2.DestroyPhysicalMonitors(count.value, arr)
     except Exception as exc:
         return "error: %s" % exc
+
+
+def diagnostics_text(cfg):
+    """The --diag report as a string, for the tray menu and the clipboard.
+
+    Captures print_diagnostics rather than duplicating it, so the two can never
+    drift apart - the terminal and the tray show the same thing by
+    construction.
+    """
+    import contextlib
+    buffer = StringIO()
+    with contextlib.redirect_stdout(buffer):
+        print_diagnostics(cfg)
+    return buffer.getvalue()
 
 
 def print_diagnostics(cfg):
