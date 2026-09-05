@@ -78,9 +78,14 @@ test machine simply had that display *set* to 800x600 by hand years earlier, and
 Windows was restoring the chosen mode.
 
 The mistake survived because Windows' reported resolution was taken as the
-amp's behaviour. Reading the EDID directly is what settled it. If you are
-working out what your own amp does, read what it advertises rather than what
-Windows happens to be using.
+amp's behaviour. What it is *set* to and what it *asks for* are different
+things, and only the second tells you anything about the hardware.
+
+You do not need to read EDID bytes to see the difference. In Windows display
+settings, the resolution marked **(Recommended)** is the preferred timing from
+the EDID — what the display is asking for. On the AVR-790 with nothing attached
+that reads "1920 x 1080 (Recommended)" while the display is set to 800x600. The
+gap between those two numbers is the whole story.
 
 **Neither advertises a small "fallback" resolution.** Both offer modes up to
 1920x1080 with nothing attached. Earlier notes claimed the Denon dropped to

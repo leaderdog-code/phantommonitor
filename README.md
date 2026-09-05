@@ -88,6 +88,12 @@ likely to pass EDID through, since 4K, HDR and eARC all need the amp to
 negotiate with the real display. Do not assume yours behaves like a Denon or a
 Yamaha because of the badge — run `--diag` and look.
 
+**Quick way to tell what your amp is doing.** With nothing plugged in behind it,
+open Windows display settings, select that display and look at the resolution
+list. The mode marked **(Recommended)** is the one the amp is asking for — it is
+the preferred timing out of its EDID. If that says 1920x1080 with no screen
+attached, the amp is not signalling anything and size alone will not help you.
+
 ### Making an amp automatic when it gives no signal
 
 You can create the signal yourself. With nothing plugged in behind the amp, set
