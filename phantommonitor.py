@@ -2946,9 +2946,21 @@ class TrayApp:
                 continue            # that display is not here today
             try:
                 x, y, width, height = offset_onto(slot["rel"], mon)
-                win32gui.SetWindowPos(hwnd, 0, x, y, width, height,
-                                      win32con.SWP_NOZORDER
-                                      | win32con.SWP_NOACTIVATE)
+                current = win32gui.GetWindowPlacement(hwnd)
+                if current[1] == win32con.SW_SHOWMINIMIZED:
+                    # Leave it minimized and correct where it will reappear.
+                    # Yanking a window open because you tidied the screen would
+                    # be rude, and rcNormalPosition is in workspace coordinates
+                    # rather than screen ones.
+                    ox, oy = self.guard.workspace_offset()
+                    win32gui.SetWindowPlacement(
+                        hwnd, (current[0], current[1], current[2], current[3],
+                               (x - ox, y - oy,
+                                x - ox + width, y - oy + height)))
+                else:
+                    win32gui.SetWindowPos(hwnd, 0, x, y, width, height,
+                                          win32con.SWP_NOZORDER
+                                          | win32con.SWP_NOACTIVATE)
                 placed += 1
             except Exception:
                 continue
