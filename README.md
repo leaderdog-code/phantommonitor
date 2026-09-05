@@ -35,8 +35,12 @@ always does. **More info -> Run anyway**, or build it yourself from source.
 
 ## Setup
 
-Run it, right-click the tray icon, choose **Settings**, tick the display you
+Run it, **left-click the tray icon** to open Settings, and tick the display you
 want blocked. That is the whole setup.
+
+Right-click the icon for everything else, including a **Block** tick per display
+— handy for letting yourself use a screen behind the amp for a while without
+going into Settings.
 
 Displays are matched by EDID hardware id, not by index, so rules survive
 reboots, cable swaps and port changes.
@@ -95,7 +99,7 @@ attached, the amp is not signalling anything and size alone will not help you.
 
 ### Which rule to use
 
-Right-click the tray icon and choose **Which rule should I use?**. It opens a
+Right-click the tray icon and choose **Diagnose my displays...**. It opens a
 report naming every display, what each one is *asking for*, and the rule to try
 for anything that looks like an amp. It also copies the report to your
 clipboard, ready to paste into an issue.
@@ -110,7 +114,7 @@ The ladder it works down:
 | shows the screen's id when one wakes up | plain id | yes |
 | asks for an **interlaced** mode with nothing behind it | `@interlaced` | yes |
 | sits at a small resolution you set yourself | `@<1280x720` | yes |
-| does none of these | plain id + untick when you use the screen | no |
+| does none of these | plain id, and untick **Block** for it when you want the screen | no |
 
 Only the last rung always works. The others depend on what your hardware is
 willing to tell us, and that varies **by model, not by brand** — two receivers
@@ -127,7 +131,7 @@ something neither of them does.
 Two units, one household. Nobody is going to buy a dozen receivers across four
 eras to fill this table in, so it grows by report or not at all.
 
-**Please add yours.** Use **Which rule should I use?** twice — once with a
+**Please add yours.** Use **Diagnose my displays...** twice — once with a
 screen awake behind the amp, once a few minutes after switching that screen off
 — and paste both into an issue. It copies itself to the clipboard each
 time. The "it asks for" line is the one that matters. Every model added is one
@@ -158,7 +162,7 @@ stop matching.
 monitor turned on its side. Use an exact `@1920x1080` only for a display you are
 reserving that must stay blocked whatever is attached.
 
-Check yours rather than assuming. Use **Which rule should I use?** with a screen
+Check yours rather than assuming. Use **Diagnose my displays...** with a screen
 awake behind the amp, switch that screen off, **give it a few minutes**, and look
 again.
 
@@ -239,5 +243,5 @@ even when something has the pointer trapped.
 MIT. Written by Raymond Pierce, co-authored with Claude Opus 5.
 
 Bug reports are welcome, especially reports from receivers other than the two
-tested here — the tray menu's **Which rule should I use?** copies everything
+tested here — the tray menu's **Diagnose my displays...** copies everything
 needed.

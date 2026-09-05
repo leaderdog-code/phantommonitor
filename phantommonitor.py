@@ -2425,6 +2425,17 @@ class TrayApp:
         # currently applying.
         blocked_now = set(m.device for m in self.guard.blocked())
 
+        # One tick per display. Unblocking a screen to use it was previously
+        # a trip into Settings, which is a lot of clicks for something you do
+        # every time you want to watch a film on the screen behind the amp.
+        # _make_block_toggle parks a qualified rule rather than discarding it,
+        # so unticking and reticking does not silently downgrade
+        # DON0015@interlaced to a bare id.
+        for mon in self.guard.monitors:
+            add("Block %s" % mon.name, self._make_block_toggle(mon.hwid),
+                checked=mon.device in blocked_now)
+        sep()
+
         add("Rescue windows now",
             lambda: self.guard.sweep("manual", include_offscreen=True))
         add("Save window + icon layout now", self._snapshot_all)
@@ -2479,7 +2490,7 @@ class TrayApp:
         add("Reload settings", self._reload_config)
         add("Open config folder", lambda: os.startfile(APP_DIR))
         add("View log", lambda: open_text_file(LOG_PATH, editor))
-        add("Which rule should I use?", self._show_diagnostics)
+        add("Diagnose my displays...", self._show_diagnostics)
         sep()
         add("Quit " + APP_NAME, self._quit)
 
@@ -2726,7 +2737,15 @@ class TrayApp:
     # -- message pump
     def _wnd_proc(self, hwnd, msg, wparam, lparam):
         if msg == WM_TRAYICON:
-            if lparam in (win32con.WM_RBUTTONUP, win32con.WM_LBUTTONUP):
+            if lparam == win32con.WM_LBUTTONUP:
+                # Left click is the primary action, which for this app is
+                # "show me the settings" - the convention almost every tray
+                # app follows. Right click is where options live.
+                try:
+                    self._open_settings()
+                except Exception:
+                    log.exception("could not open settings from the tray")
+            elif lparam == win32con.WM_RBUTTONUP:
                 try:
                     self._show_menu()
                 except Exception:
