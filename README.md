@@ -1,7 +1,7 @@
 # Phantom Monitor
 
-Stops Windows putting your windows on the invisible display an AV receiver,
-soundbar or HDMI switch creates.
+Guards against phantom displays — the invisible monitors an AVR, soundbar or
+other HDMI device creates in Windows.
 
 ## The problem
 
