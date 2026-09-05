@@ -123,7 +123,8 @@ DEFAULT_CONFIG = {
     "not_av_devices": [],
     "cursor_lock_apps": [],
     "cursor_lock_fullscreen": True,
-    "cursor_never_lock": ["mstsc.exe", "explorer.exe"],
+    "cursor_never_lock": ["mstsc.exe", "explorer.exe",
+                          "screenclippinghost.exe", "snippingtool.exe"],
     "settings_zoom": 1.0,
     "app_displays": {},
     "app_positions": {},
@@ -597,6 +598,16 @@ def fenceable(blocked, app_displays):
     return [m for m in blocked if m.hwid not in pinned]
 
 
+def spans_displays(rect, monitors, fraction=0.10):
+    """How many displays this window meaningfully covers."""
+    n = 0
+    for mon in monitors:
+        area = (mon.rect[2] - mon.rect[0]) * (mon.rect[3] - mon.rect[1])
+        if area > 0 and overlap_area(rect, mon) >= fraction * area:
+            n += 1
+    return n
+
+
 def clip_is_owned(cur, fg_rect, fg_app, never_lock=()):
     """True if the window in front could plausibly have set this clip.
 
@@ -944,6 +955,13 @@ def cursor_lock_rect(rect, monitors, blocked, app, lock_apps,
     # screen, so clicking the wallpaper would trap the mouse on that
     # monitor. Real full-screen covers the taskbar too and has no frame.
     if not borderless or not covers_monitor(rect, host, fraction=0.995):
+        return None
+    # A window covering several displays at once is not a game, it is an
+    # overlay - the Win+Shift+S snip layer is exactly this, borderless and
+    # stretched across every screen. Holding the pointer to whichever
+    # display it happens to overlap most drags the mouse off whatever the
+    # user was actually pointing at.
+    if spans_displays(rect, monitors) > 1:
         return None
     name = (app or "").strip().lower()
     if name and name in set(a.strip().lower() for a in lock_apps or () if a):

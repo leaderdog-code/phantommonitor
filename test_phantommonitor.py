@@ -561,6 +561,24 @@ check("a full-screen window on a BLOCKED display never holds the pointer",
       mg.cursor_lock_rect(GAME_MON.rect, guard.monitors, [GAME_MON],
                           "somegame.exe", [], [], True, True) is None)
 
+# The Win+Shift+S snip layer is borderless and stretched across every screen.
+# Treating that as a full-screen app held the pointer to whichever display it
+# overlapped most, dragging the mouse off whatever the user was pointing at.
+ALL = guard.monitors
+span = (min(m.rect[0] for m in ALL), min(m.rect[1] for m in ALL),
+        max(m.rect[2] for m in ALL), max(m.rect[3] for m in ALL))
+ONE = next(m for m in ALL if m.primary)
+check("a window across every display is an overlay, not a game",
+      mg.spans_displays(span, ALL) > 1)
+check("a full-screen game covers exactly one display",
+      mg.spans_displays(ONE.rect, ALL) == 1)
+check("a screen-spanning overlay never holds the pointer",
+      mg.cursor_lock_rect(span, ALL, [], "screenclippinghost.exe",
+                          [], [], True, True) is None)
+check("a single-display game still holds the pointer",
+      mg.cursor_lock_rect(ONE.rect, ALL, [], "somegame.exe",
+                          [], [], True, True) == ONE.rect)
+
 # A cursor clip outlives whatever set it. A game exits with the pointer still
 # confined to where its window was, and deferring to that seals the user inside
 # a rectangle with nothing in it - unable to reach the tray icon that would
