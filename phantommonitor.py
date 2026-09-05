@@ -2401,7 +2401,7 @@ class TrayApp:
         menu = win32gui.CreatePopupMenu()
         next_id = [1000]
 
-        def add(text, handler, checked=False, enabled=True):
+        def add(text, handler, checked=False, enabled=True, into=None):
             flags = win32con.MF_STRING
             if checked:
                 flags |= win32con.MF_CHECKED
@@ -2409,15 +2409,17 @@ class TrayApp:
                 flags |= win32con.MF_GRAYED
             item_id = next_id[0]
             next_id[0] += 1
-            win32gui.AppendMenu(menu, flags, item_id, text)
+            win32gui.AppendMenu(into if into else menu, flags, item_id, text)
             self.actions[item_id] = handler
 
-        def add_sub(text, submenu):
-            win32gui.AppendMenu(menu, win32con.MF_STRING | win32con.MF_POPUP,
+        def add_sub(text, submenu, into=None):
+            win32gui.AppendMenu(into if into else menu,
+                                win32con.MF_STRING | win32con.MF_POPUP,
                                 submenu, text)
 
-        def sep():
-            win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
+        def sep(into=None):
+            win32gui.AppendMenu(into if into else menu,
+                                win32con.MF_SEPARATOR, 0, "")
 
         enabled = self.cfg.get("enabled", True)
         # Ask the guard what is actually blocked right now: a rule can be
@@ -2436,20 +2438,17 @@ class TrayApp:
                 checked=mon.device in blocked_now)
         sep()
 
-        add("Rescue windows now",
-            lambda: self.guard.sweep("manual", include_offscreen=True))
-        add("Save window + icon layout now", self._snapshot_all)
-        add("Restore window + icon layout", self._restore_all)
-        add("Auto-restore window positions", self._toggle_restore_windows,
-            checked=self.cfg.get("restore_windows", True))
-        add("Auto-restore desktop icons", self._toggle_restore_icons,
-            checked=self.cfg.get("restore_icons", True))
+        # The two master switches stay at the top level: they are the answer to
+        # "make it stop", and burying that in a submenu would be unkind.
         add("Keep windows off blocked displays", self._toggle_enabled,
             checked=enabled)
         add("Keep pointer off blocked displays", self._toggle_cursor_block,
             checked=self.cfg.get("block_cursor", False) and enabled,
             enabled=enabled)
         sep()
+
+        add("Rescue windows now",
+            lambda: self.guard.sweep("manual", include_offscreen=True))
 
         move_menu = win32gui.CreatePopupMenu()
         specs = self.cfg.get("hotkeys") or {}
@@ -2475,22 +2474,41 @@ class TrayApp:
             win32gui.DestroyMenu(move_menu)
         sep()
 
-        add("Check for updates", self._check_updates)
-        add("Project page", lambda: open_url(PROJECT_URL))
-        support = (self.cfg.get("support_url") or "").strip()
-        if support:
-            add("Support this project", lambda: open_url(support))
-        sep()
-
-        add("Start with Windows", self._toggle_autostart,
-            checked=os.path.exists(STARTUP_VBS))
         editor = self.cfg.get("editor", "")
         add("Settings...", self._open_settings)
-        add("Edit config file", lambda: open_text_file(CONFIG_PATH, editor))
-        add("Reload settings", self._reload_config)
-        add("Open config folder", lambda: os.startfile(APP_DIR))
-        add("View log", lambda: open_text_file(LOG_PATH, editor))
         add("Diagnose my displays...", self._show_diagnostics)
+
+        # Everything below is occasional. Grouped so the menu stays short
+        # enough to read at a glance - it had grown to twenty flat items.
+        layouts = win32gui.CreatePopupMenu()
+        add("Save window + icon layout now", self._snapshot_all, into=layouts)
+        add("Restore window + icon layout", self._restore_all, into=layouts)
+        sep(into=layouts)
+        add("Auto-restore window positions", self._toggle_restore_windows,
+            checked=self.cfg.get("restore_windows", True), into=layouts)
+        add("Auto-restore desktop icons", self._toggle_restore_icons,
+            checked=self.cfg.get("restore_icons", True), into=layouts)
+        add_sub("Layouts", layouts)
+
+        advanced = win32gui.CreatePopupMenu()
+        add("Start with Windows", self._toggle_autostart,
+            checked=os.path.exists(STARTUP_VBS), into=advanced)
+        sep(into=advanced)
+        add("Edit config file", lambda: open_text_file(CONFIG_PATH, editor),
+            into=advanced)
+        add("Reload settings", self._reload_config, into=advanced)
+        add("Open config folder", lambda: os.startfile(APP_DIR), into=advanced)
+        add("View log", lambda: open_text_file(LOG_PATH, editor), into=advanced)
+        add_sub("Advanced", advanced)
+
+        about = win32gui.CreatePopupMenu()
+        add("Check for updates", self._check_updates, into=about)
+        add("Project page", lambda: open_url(PROJECT_URL), into=about)
+        support = (self.cfg.get("support_url") or "").strip()
+        if support:
+            add("Support this project", lambda: open_url(support), into=about)
+        add_sub("About", about)
+
         sep()
         add("Quit " + APP_NAME, self._quit)
 
