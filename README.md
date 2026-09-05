@@ -68,6 +68,27 @@ depends on which rule suits your hardware — see [Block rules](#block-rules).
 - Fixes minimized windows whose restore position is on a blocked display
 - Pins named apps to a display, so one screen can be dedicated to them
 
+## Games that scatter your windows
+
+You do not need a phantom display to want this part.
+
+Launch a full-screen game and Windows commonly sweeps everything off your other
+monitors onto the primary, then leaves it there when you quit. It is worse with
+mixed-size monitors, and a game taking exclusive full screen is the usual
+trigger — it changes the display configuration and changes it straight back,
+and Windows rearranges your desktop in between.
+
+Phantom Monitor takes a snapshot of where every window is, notices the display
+event, waits for Windows and the game to finish shuffling, and puts back
+anything that moved. Windows you moved yourself are left alone — it only
+restores what the change displaced.
+
+Desktop icons get the same treatment, since Windows recalculates the icon grid
+on a display change and never restores it either.
+
+Both are on by default. **Settings and more ▸ Layouts** has the switches, plus
+manual save and restore.
+
 ## Block rules
 
 A rule is a hardware id, optionally qualified by size. Settings shows the id
@@ -249,6 +270,15 @@ even when something has the pointer trapped.
   full-screen handling, apps that store their own position
 - [Building and testing](docs/development.md) — running from source, the test
   suite, producing the binaries
+
+## If you are looking for this by symptom
+
+Windows opening on an invisible monitor. Windows moving to the main monitor
+when a game launches. Windows not going back after quitting a game. Desktop
+icons rearranged after a resolution change. Mouse disappearing onto a screen
+that is not there. AV receiver showing as a second display. Denon, Yamaha,
+Onkyo, Marantz, Pioneer or soundbar appearing in Display Settings. HDMI audio
+creating a fake monitor.
 
 ## Licence
 
