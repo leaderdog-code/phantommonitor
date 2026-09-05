@@ -57,14 +57,14 @@ depends on which rule suits your hardware — see [Block rules](#block-rules).
 
 ## Block rules
 
-A rule names a hardware id, and blocks a display **whenever that id is the one
-Windows is reporting**.
+A rule is a hardware id, optionally qualified by size. `--list` prints the ids
+of your displays.
 
 | Rule | Blocks that display |
 |---|---|
-| `DON0015` | whenever this id is present |
-| `DON0015@800x600` | only while it is exactly this size |
-| `DON0015@<1280x720` | only while it has fewer pixels than this |
+| `ABC1234` | whenever Windows reports this id |
+| `ABC1234@1920x1080` | only while it is exactly this size |
+| `ABC1234@<1280x720` | only while it has fewer pixels than this |
 
 "Whenever the id is present" is the useful part, and it is why the plain form is
 usually enough. An AV receiver is an HDMI repeater: it reads the EDID of
