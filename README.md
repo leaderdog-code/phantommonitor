@@ -240,6 +240,12 @@ Placement happens when a window **opens**. Drag it somewhere else afterwards and
 it stays where you put it — the pin decides where things start, it does not
 police them.
 
+**Do you even need the pin?** Most apps already remember where you left them, so
+if the screen is not blocked, pinning adds little. Its real job is the exemption:
+without it, blocking a screen empties it completely, including the app you wanted
+there. Pin things you are blocking around, and apps that forget their position
+or get dumped on the primary by a display change.
+
 <details>
 <summary>Doing it by hand in config.json</summary>
 
