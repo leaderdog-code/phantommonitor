@@ -2475,39 +2475,37 @@ class TrayApp:
         sep()
 
         editor = self.cfg.get("editor", "")
-        add("Settings...", self._open_settings)
-        add("Diagnose my displays...", self._show_diagnostics)
 
-        # Everything below is occasional. Grouped so the menu stays short
-        # enough to read at a glance - it had grown to twenty flat items.
-        layouts = win32gui.CreatePopupMenu()
-        add("Save window + icon layout now", self._snapshot_all, into=layouts)
-        add("Restore window + icon layout", self._restore_all, into=layouts)
-        sep(into=layouts)
+        # Everything occasional lives behind one slide, so the top level stays
+        # short enough to read at a glance. Start with Windows sits last,
+        # behind a separator: it changes what happens at every logon and is not
+        # something to catch with a stray click.
+        more = win32gui.CreatePopupMenu()
+        add("Open settings window...", self._open_settings, into=more)
+        add("Diagnose my displays...", self._show_diagnostics, into=more)
+        sep(into=more)
+        add("Save window + icon layout now", self._snapshot_all, into=more)
+        add("Restore window + icon layout", self._restore_all, into=more)
         add("Auto-restore window positions", self._toggle_restore_windows,
-            checked=self.cfg.get("restore_windows", True), into=layouts)
+            checked=self.cfg.get("restore_windows", True), into=more)
         add("Auto-restore desktop icons", self._toggle_restore_icons,
-            checked=self.cfg.get("restore_icons", True), into=layouts)
-        add_sub("Layouts", layouts)
-
-        advanced = win32gui.CreatePopupMenu()
-        add("Start with Windows", self._toggle_autostart,
-            checked=os.path.exists(STARTUP_VBS), into=advanced)
-        sep(into=advanced)
+            checked=self.cfg.get("restore_icons", True), into=more)
+        sep(into=more)
         add("Edit config file", lambda: open_text_file(CONFIG_PATH, editor),
-            into=advanced)
-        add("Reload settings", self._reload_config, into=advanced)
-        add("Open config folder", lambda: os.startfile(APP_DIR), into=advanced)
-        add("View log", lambda: open_text_file(LOG_PATH, editor), into=advanced)
-        add_sub("Advanced", advanced)
-
-        about = win32gui.CreatePopupMenu()
-        add("Check for updates", self._check_updates, into=about)
-        add("Project page", lambda: open_url(PROJECT_URL), into=about)
+            into=more)
+        add("Reload settings", self._reload_config, into=more)
+        add("Open config folder", lambda: os.startfile(APP_DIR), into=more)
+        add("View log", lambda: open_text_file(LOG_PATH, editor), into=more)
+        sep(into=more)
+        add("Check for updates", self._check_updates, into=more)
+        add("Project page", lambda: open_url(PROJECT_URL), into=more)
         support = (self.cfg.get("support_url") or "").strip()
         if support:
-            add("Support this project", lambda: open_url(support), into=about)
-        add_sub("About", about)
+            add("Support this project", lambda: open_url(support), into=more)
+        sep(into=more)
+        add("Start with Windows", self._toggle_autostart,
+            checked=os.path.exists(STARTUP_VBS), into=more)
+        add_sub("Settings and more", more)
 
         sep()
         add("Quit " + APP_NAME, self._quit)
