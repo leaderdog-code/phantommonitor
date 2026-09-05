@@ -47,7 +47,7 @@ unplugged:
 | Amp | Nothing behind it | Screen awake behind it | Signal |
 |---|---|---|---|
 | Yamaha HTR-4063 | `YMH3148` | `TSB0210` — the TV's own id | the **id** |
-| Denon | `DON0015`, EDID prefers 1920x1080i | `DON0015`, EDID prefers 1920x1080 | **none** |
+| Denon AVR-790 | `DON0015`, EDID prefers 1920x1080i | `DON0015`, EDID prefers 1920x1080 | **none** |
 
 The Yamaha passes the downstream EDID upstream, so Windows sees the TV rather
 than the amp. Its resolution is identical in both states, so no size rule would
@@ -63,6 +63,12 @@ TV timing, because a TV is what it expects downstream.
 So passing EDID upstream is what a repeater is *specified* to do, and not what
 they all do. Where an amp does not, there may be no automatic signal at all, and
 a manual tick is the honest answer.
+
+**Treat both results as per model, not per brand.** These are two units, one of
+each kind, and the one giving no signal is an older receiver. A modern amp has
+to negotiate 4K, HDR and eARC with the real display, which makes pass-through
+far more likely. Nothing here predicts what a different Denon, or a different
+Yamaha, will do.
 
 ### A warning about resolution as a signal
 

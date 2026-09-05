@@ -72,15 +72,21 @@ behind it. There are two kinds, and both were measured here:
 | The amp | When a screen wakes up behind it | Rule | Tested on |
 |---|---|---|---|
 | Passes the screen's EDID upstream | its **id** disappears — Windows sees the screen | plain id, e.g. `YMH3148` | Yamaha HTR-4063 |
-| Keeps its own EDID | **nothing changes** — same id, same size | tick it by hand | Denon |
+| Keeps its own EDID | **nothing changes** — same id, same size | tick it by hand | Denon AVR-790 |
 
 With the first kind the rule stands itself down when a screen is awake and comes
 back when the screen goes. Nothing to switch.
 
 With the second kind there is no signal to work with, so blocking is a tick you
 turn off when you want to use the screen. Do not expect an amp to announce
-itself by dropping to a small resolution — the Denon tested here advertises
+itself by dropping to a small resolution — the AVR-790 tested here advertises
 1920x1080 whether or not anything is plugged in behind it.
+
+**This is per model, not per brand.** Two units were tested, one of each kind,
+and the one that gives no signal is an older receiver. Newer ones are more
+likely to pass EDID through, since 4K, HDR and eARC all need the amp to
+negotiate with the real display. Do not assume yours behaves like a Denon or a
+Yamaha because of the badge — run `--diag` and look.
 
 The `@` forms are for when you want a size condition of your own: pin the amp's
 display to a small resolution deliberately, and `@<1280x720` will then track it.
