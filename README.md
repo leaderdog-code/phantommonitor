@@ -72,11 +72,15 @@ depends on which rule suits your hardware — see [Block rules](#block-rules).
 
 You do not need a phantom display to want this part.
 
-Launch a full-screen game and Windows commonly sweeps everything off your other
-monitors onto the primary, then leaves it there when you quit. It is worse with
-mixed-size monitors, and a game taking exclusive full screen is the usual
-trigger — it changes the display configuration and changes it straight back,
-and Windows rearranges your desktop in between.
+Sometimes a full-screen game sweeps everything off your other monitors onto the
+primary and leaves it there when you quit. A game taking exclusive full screen
+changes the display configuration and changes it straight back, and Windows can
+rearrange your desktop in between.
+
+It does not happen every time or on every setup — the same game on the same
+machine scattered windows once here and left them alone an hour later. Mixed
+monitor sizes and anything else that disturbs the display arrangement seem to
+make it likelier.
 
 Phantom Monitor takes a snapshot of where every window is, notices the display
 event, waits for Windows and the game to finish shuffling, and puts back
