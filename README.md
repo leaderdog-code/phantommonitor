@@ -128,6 +128,11 @@ lands in which slot is chance, and does not matter: you navigate to what you
 want in each one anyway. It means the arrangement survives a reboot, where
 window handles do not, and it does not break when a page title changes.
 
+- **Windows are gathered, not just tidied.** Arranging a display pulls that
+  app's windows in from wherever they are, so Discord comes home even if it was
+  on another screen. Handy for "set my streaming screen up", but it means a
+  browser window you wanted left elsewhere can be collected too — the slots
+  only know "a brave.exe window", not which one you cared about.
 - Extra windows beyond the slots are left where they are
 - Missing apps just leave their slot empty
 - Positions are relative to each display, so moving a monitor does not spoil it
