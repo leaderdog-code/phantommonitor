@@ -112,15 +112,17 @@ manual save and restore.
 ## Saving an arrangement
 
 Set a screen up the way you like — chat down one side, a couple of browser
-windows filling the rest — then **Settings and more ▸ Save this arrangement**
-and pick that display. Later, **Arrange windows like that again ▸ that display**
-puts it back.
+windows filling the rest — then **Settings and more ▸ Save this arrangement
+as...**, pick which display, and give it a name. *Streaming*, *Accounting*,
+whatever fits.
 
-**Do it per display.** A primary screen is usually a free-for-all nobody wants
-tidied, while a side screen is deliberately laid out. Saving one display leaves
-the others' saved arrangements untouched, and applying one moves only its own
-windows. There is an *Every display* option in both menus if you do want the
-lot.
+Later, **Arrange windows like...** and pick the name. Or **Set up like...,
+opening what is missing**, which starts anything that is not running first.
+
+**Save per display.** A primary screen is usually a free-for-all nobody wants
+recorded, while a side screen is deliberately laid out. Saving one display into
+an existing name replaces only that display's part of it, so a mode can be built
+up one screen at a time. *Every display* is there if you want the lot.
 
 It saves *shapes per app*, not particular windows. "Two Brave windows go in
 these two rectangles" rather than "this exact window goes here". Which browser

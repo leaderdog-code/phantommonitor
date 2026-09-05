@@ -2669,7 +2669,11 @@ class TrayApp:
         add("Save window + icon layout now", self._snapshot_all, into=more)
         add("Restore window + icon layout", self._restore_all, into=more)
         sep(into=more)
-        saved_hwids = set(x.get("hwid") for x in self._load_arrangement())
+        modes = self._load_modes()
+
+        # Save: pick which screen, then it asks for a name. Per screen because
+        # a primary display is usually a free-for-all nobody wants recorded,
+        # while a side screen is the one deliberately laid out.
         save_menu = win32gui.CreatePopupMenu()
         add("Every display", lambda: self._save_arrangement(), into=save_menu)
         sep(into=save_menu)
@@ -2677,28 +2681,25 @@ class TrayApp:
             add(mon.label(),
                 (lambda h: lambda: self._save_arrangement(h))(mon.hwid),
                 into=save_menu)
-        add_sub("Save this arrangement", save_menu, into=more)
+        add_sub("Save this arrangement as...", save_menu, into=more)
 
-        apply_menu = win32gui.CreatePopupMenu()
-        add("Every display", lambda: self._apply_arrangement(),
-            enabled=bool(saved_hwids), into=apply_menu)
-        sep(into=apply_menu)
-        for mon in self.guard.monitors:
-            add(mon.label(),
-                (lambda h: lambda: self._apply_arrangement(h))(mon.hwid),
-                enabled=mon.hwid in saved_hwids, into=apply_menu)
-        add_sub("Arrange windows like that again", apply_menu, into=more)
+        if modes:
+            apply_menu = win32gui.CreatePopupMenu()
+            setup_menu = win32gui.CreatePopupMenu()
+            for name in sorted(modes):
+                add(name,
+                    (lambda n: lambda: self._apply_arrangement(mode=n))(name),
+                    into=apply_menu)
+                add(name,
+                    (lambda n: lambda: self._apply_arrangement(
+                        mode=n, launch=True))(name),
+                    into=setup_menu)
+            add_sub("Arrange windows like...", apply_menu, into=more)
+            # Separate from plain arranging, because this starts programs and
+            # that should never happen as a side effect of tidying a screen.
+            add_sub("Set up like..., opening what is missing", setup_menu,
+                    into=more)
 
-        # Separate from plain arranging, because this starts programs and that
-        # should never happen as a side effect of tidying a screen.
-        setup_menu = win32gui.CreatePopupMenu()
-        for mon in self.guard.monitors:
-            add(mon.label(),
-                (lambda h: lambda: self._apply_arrangement(
-                    h, reason="saved layout", launch=True))(mon.hwid),
-                enabled=mon.hwid in saved_hwids, into=setup_menu)
-        add_sub("Set this screen up, opening what is missing", setup_menu,
-                into=more)
         add("Undo that arrangement", self._undo_arrangement,
             enabled=bool(self._load_arrangement(ARRANGEMENT_UNDO_PATH)),
             into=more)
@@ -2930,7 +2931,26 @@ class TrayApp:
     # did that display change just move?". This is on disk and answers "put my
     # screen back the way I like it", which is a thing you want after a reboot,
     # when the snapshot is long gone.
+    def _load_modes(self):
+        """{name: [slots]}. Understands the older single unnamed arrangement."""
+        try:
+            with open(ARRANGEMENT_PATH, "r", encoding="utf-8") as handle:
+                data = json.load(handle) or {}
+        except (OSError, ValueError):
+            return {}
+        if isinstance(data.get("modes"), dict):
+            return dict((k, v.get("slots") or []) for k, v in data["modes"].items())
+        if data.get("slots"):
+            return {"Saved layout": data["slots"]}   # written before modes
+        return {}
+
+    def _save_modes(self, modes):
+        return self._write_json(
+            ARRANGEMENT_PATH,
+            {"modes": dict((k, {"slots": v}) for k, v in modes.items())})
+
     def _load_arrangement(self, path=None):
+        """Slots from a standalone file, used for the undo."""
         try:
             with open(path or ARRANGEMENT_PATH, "r", encoding="utf-8") as handle:
                 return (json.load(handle) or {}).get("slots") or []
@@ -2938,15 +2958,68 @@ class TrayApp:
             return []
 
     def _write_arrangement(self, slots, path):
+        return self._write_json(path, {"slots": slots})
+
+    def _write_json(self, path, payload):
         try:
             with open(path, "w", encoding="utf-8") as handle:
-                json.dump({"slots": slots}, handle, indent=2)
+                json.dump(payload, handle, indent=2)
             return True
         except OSError as exc:
             log.error("could not write %s: %s", os.path.basename(path), exc)
             return False
 
-    def _save_arrangement(self, only_hwid=None):
+    def _save_arrangement(self, only_hwid=None, mode=None):
+        """Save the current layout into a named mode.
+
+        With no name, one is asked for in a child process - a modal dialog here
+        would stall the message pump that runs everything else. The slots are
+        gathered first, so what gets saved is the screen as it looked when the
+        menu was clicked, not after the user has been typing for a minute.
+        """
+        if mode is None:
+            slots = self._gather_slots(only_hwid)
+            if not slots:
+                log.info("nothing to save")
+                return
+            threading.Thread(target=self._name_then_save,
+                             args=(slots, only_hwid), daemon=True).start()
+            return
+        slots = self._gather_slots(only_hwid)
+        if not slots:
+            log.info("nothing to save")
+            return
+        self._store_mode(mode, slots, only_hwid)
+
+    def _name_then_save(self, slots, only_hwid):
+        try:
+            if getattr(sys, "frozen", False):
+                cmd = [sys.executable, "--ask-name", "Name this arrangement"]
+            else:
+                cmd = [sys.executable, os.path.join(APP_DIR, "phantommonitor.py"),
+                       "--ask-name", "Name this arrangement"]
+            done = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        except Exception as exc:
+            log.warning("could not ask for a name: %s", exc)
+            return
+        name = (done.stdout or "").strip()
+        if done.returncode != 0 or not name:
+            log.info("naming cancelled; nothing saved")
+            return
+        self._store_mode(name, slots, only_hwid)
+
+    def _store_mode(self, name, slots, only_hwid):
+        modes = self._load_modes()
+        if only_hwid and name in modes:
+            # Saving one screen into an existing mode replaces only that
+            # screen's slots, so building a mode up display by display works.
+            slots = [x for x in modes[name]
+                     if x.get("hwid") != only_hwid] + slots
+        modes[name] = slots
+        if self._save_modes(modes):
+            log.info("saved %d window(s) as %r", len(slots), name)
+
+    def _gather_slots(self, only_hwid=None):
         slots = []
         hwnds = []
         win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
@@ -2967,27 +3040,19 @@ class TrayApp:
             slots.append({"app": app, "hwid": mon.hwid,
                           "rel": list(offset_in(rect, mon)),
                           "exe": exe_path(hwnd)})
-        if not slots:
-            log.info("nothing to save")
-            return
-        if only_hwid:
-            # Saving one screen must not wipe the others. A primary display is
-            # usually a free-for-all nobody wants rearranged, while a side
-            # screen is deliberately laid out - so they are saved separately
-            # and kept separately.
-            slots = [x for x in self._load_arrangement()
-                     if x.get("hwid") != only_hwid] + slots
-        try:
-            with open(ARRANGEMENT_PATH, "w", encoding="utf-8") as handle:
-                json.dump({"slots": slots}, handle, indent=2)
-        except OSError as exc:
-            log.error("could not save the arrangement: %s", exc)
-            return
-        log.info("saved an arrangement of %d window(s)", len(slots))
+        return slots
 
     def _apply_arrangement(self, only_hwid=None, path=None,
-                           reason="saved layout", launch=False):
-        slots = self._load_arrangement(path)
+                           reason="saved layout", launch=False, mode=None):
+        if path:
+            slots = self._load_arrangement(path)
+        else:
+            modes = self._load_modes()
+            if mode is None:
+                mode = next(iter(modes), None)
+            slots = modes.get(mode) or []
+            if mode:
+                reason = repr(mode) + " layout"
         if not slots:
             log.info("no saved arrangement yet - use Save first")
             return
@@ -3370,6 +3435,48 @@ def diagnostics_text(cfg):
     return buffer.getvalue()
 
 
+def ask_for_name(title, suggestion=""):
+    """Show a one-field prompt and print what was typed. Run as a child.
+
+    In its own process because a modal Tk dialog inside the tray app would
+    stall its message pump, and everything - evacuation, the fence, hotkeys -
+    runs on that pump.
+    """
+    import tkinter as tk
+    from tkinter import ttk
+    root = tk.Tk()
+    root.title(title)
+    root.resizable(False, False)
+    root.attributes("-topmost", True)
+    answer = {"text": ""}
+    ttk.Label(root, text=title).grid(row=0, column=0, columnspan=2,
+                                     padx=12, pady=(12, 4), sticky="w")
+    var = tk.StringVar(value=suggestion)
+    entry = ttk.Entry(root, textvariable=var, width=32)
+    entry.grid(row=1, column=0, columnspan=2, padx=12, pady=4)
+    entry.focus_set()
+    entry.selection_range(0, tk.END)
+
+    def ok(*_a):
+        answer["text"] = var.get().strip()
+        root.destroy()
+
+    ttk.Button(root, text="Cancel", command=root.destroy).grid(
+        row=2, column=0, padx=12, pady=12, sticky="e")
+    ttk.Button(root, text="Save", command=ok).grid(
+        row=2, column=1, padx=(0, 12), pady=12, sticky="w")
+    root.bind("<Return>", ok)
+    root.bind("<Escape>", lambda _e: root.destroy())
+    root.update_idletasks()
+    root.geometry("+%d+%d" % (root.winfo_screenwidth() // 2 - 150,
+                              root.winfo_screenheight() // 3))
+    root.mainloop()
+    if not answer["text"]:
+        return 1
+    sys.stdout.write(answer["text"])
+    return 0
+
+
 def print_diagnostics(cfg):
     """Everything worth pasting into a bug report."""
     print("Phantom Monitor diagnostics")
@@ -3465,6 +3572,11 @@ def main():
                   os.path.join(LOG_DIR, "settings.log")
                   if "--settings" in args else None)
     awareness = set_dpi_awareness()
+
+    if "--ask-name" in args:
+        rest = [a for a in sys.argv[1:] if a != "--ask-name"]
+        return ask_for_name(rest[0] if rest else "Name",
+                            rest[1] if len(rest) > 1 else "")
 
     if "--arrange" in args:
         # Ask the running guard to do it, rather than starting a second copy
