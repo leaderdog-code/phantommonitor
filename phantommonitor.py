@@ -209,6 +209,7 @@ WM_APP_ICONS = win32con.WM_APP + 2
 WM_APP_SETTINGS_CLOSED = win32con.WM_APP + 3
 WM_APP_ARRANGE = win32con.WM_APP + 4   # asked for from outside, e.g. a Stream Deck
 WM_APP_ARRANGE_NAMED = win32con.WM_APP + 5   # the settings window, via a file
+WM_APP_UNDO_ARRANGE = win32con.WM_APP + 6   # undo, from the settings window
 
 # Explorer records desktop icon positions here, and rewrites it shortly after
 # they move. Watching this is how icon changes are noticed: Explorer does not
@@ -3282,6 +3283,10 @@ class TrayApp:
                 wanted = ""
             if wanted:
                 self._apply_arrangement(mode=wanted)
+            return 0
+
+        if msg == WM_APP_UNDO_ARRANGE:
+            self._undo_arrangement()
             return 0
 
         if msg == WM_APP_SETTINGS_CLOSED:

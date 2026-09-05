@@ -318,6 +318,27 @@ def build_arrangements_tab(tabs, config_path):
     ttk.Button(side, text="Delete", command=delete).grid(
         row=2, column=0, sticky="ew")
 
+    def undo_now():
+        try:
+            hwnd = ctypes.windll.user32.FindWindowW("PhantomMonitorWnd", None)
+            if hwnd:
+                ctypes.windll.user32.PostMessageW(hwnd, 0x8000 + 6, 0, 0)
+        except Exception:
+            pass
+        undo_state()
+
+    def undo_state():
+        # Only offer it when there is something to undo.
+        there = os.path.exists(os.path.join(os.path.dirname(path),
+                                            "arrangement_undo.json"))
+        undo_button.state(["!disabled"] if there else ["disabled"])
+
+    ttk.Separator(side, orient="horizontal").grid(row=3, column=0,
+                                                  sticky="ew", pady=8)
+    undo_button = ttk.Button(side, text="Undo last arrange", command=undo_now)
+    undo_button.grid(row=4, column=0, sticky="ew")
+    undo_state()
+
     refresh()
 
 
