@@ -750,6 +750,28 @@ def edid_preferred(hwid):
     return result
 
 
+def suggest_rule(hwid, name, is_av, preferred, width, height):
+    """The rule most likely to work for this display, and why.
+
+    A ladder, best first. Only the last rung always works, and the ones above
+    it depend on what the hardware is willing to tell us - which varies by
+    model, not by brand, so this suggests rather than decides.
+    """
+    if not is_av:
+        return None, None
+    if preferred and preferred[2]:
+        return ("%s@interlaced" % hwid,
+                "it is asking for an interlaced mode, which some amps use to "
+                "mean nothing is awake behind them")
+    if width * height < 1280 * 720:
+        return ("%s@<1280x720" % hwid,
+                "it is sitting at a small resolution, so a real screen behind "
+                "it would stand the rule down")
+    return (hwid,
+            "nothing here distinguishes it from a real display, so block it "
+            "outright and untick it when you want to use a screen behind it")
+
+
 def parse_block_spec(spec):
     """Parse a block rule into (hwid, size, smaller_than, interlaced_only).
 
@@ -2867,6 +2889,17 @@ def print_diagnostics(cfg):
         if hint:
             print("   looks like  : %s, not a display - a likely thing to block"
                   % hint)
+            pref = edid_preferred(mon.hwid)
+            if pref:
+                print("   it asks for : %dx%d %s   (Windows calls this "
+                      "\"Recommended\")" % (pref[0], pref[1],
+                       "interlaced" if pref[2] else "progressive"))
+            rule, why = suggest_rule(
+                mon.hwid, mon.name, True, pref,
+                mon.rect[2] - mon.rect[0], mon.rect[3] - mon.rect[1])
+            if rule:
+                print("   try rule    : %s" % rule)
+                print("                 %s" % why)
         print("   gdi device  : %s%s" % (mon.device, "  (primary)" if mon.primary else ""))
         print("   bounds      : %s" % (mon.rect,))
         print("   work area   : %s" % (mon.work,))

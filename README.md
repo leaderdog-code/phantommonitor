@@ -94,7 +94,42 @@ list. The mode marked **(Recommended)** is the one the amp is asking for — it 
 the preferred timing out of its EDID. If that says 1920x1080 with no screen
 attached, the amp is not signalling anything and size alone will not help you.
 
-### Making an amp automatic when it gives no signal
+### Which rule to use
+
+Run `--diag`. For anything it recognises as an amp it prints what that display
+is *asking for* and suggests a rule. The ladder it works down:
+
+| If the amp | Rule | Automatic? |
+|---|---|---|
+| shows the screen's id when one wakes up | plain id | yes |
+| asks for an **interlaced** mode with nothing behind it | `@interlaced` | yes |
+| sits at a small resolution you set yourself | `@<1280x720` | yes |
+| does none of these | plain id + untick when you use the screen | no |
+
+Only the last rung always works. The others depend on what your hardware is
+willing to tell us, and that varies **by model, not by brand** — two receivers
+tested here behave completely differently, and a newer one may well do
+something neither of them does.
+
+### Receivers people have tested
+
+| Receiver | With nothing behind it | With a screen awake | Rule |
+|---|---|---|---|
+| Yamaha HTR-4063 | id `YMH3148` | id becomes the screen's | plain id |
+| Denon AVR-790 | asks for 1920x1080**i** | asks for 1920x1080**p** | `@interlaced` |
+
+Two units, one household. Nobody is going to buy a dozen receivers across four
+eras to fill this table in, so it grows by report or not at all.
+
+**Please add yours.** Open an issue with `--diag` output twice: once with a
+screen awake behind the amp, once several minutes after switching that screen
+off. The "it asks for" line is the one that matters. Every model added is one
+more that works out of the box for whoever turns up next with the same
+problem.
+
+### The fallback that always works
+
+#### Making an amp automatic when it gives no signal
 
 You can create the signal yourself. With nothing plugged in behind the amp, set
 that display to something small — 800x600 — and use `@<1280x720`. Windows
