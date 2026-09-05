@@ -2085,6 +2085,21 @@ class TrayApp:
             try:
                 if not window_displaced(hwnd, placement, self.cfg):
                     continue  # untouched by the change - do not interfere
+                # Leave full-screen windows alone. SetWindowPlacement on one
+                # drops it out of full screen, so "restoring" a full-screen RDP
+                # session or game after a display change breaks the very thing
+                # the user was looking at. They place themselves anyway.
+                try:
+                    now = win32gui.GetWindowRect(hwnd)
+                    host = monitor_of_rect(now, self.guard.monitors,
+                                           require_overlap=True)
+                    if (host is not None and not is_user_movable(hwnd)
+                            and covers_monitor(now, host, fraction=0.995)):
+                        log.debug("left %s alone: it is full-screen",
+                                  shorten(title_of(hwnd), 30))
+                        continue
+                except Exception:
+                    pass
                 current = win32gui.GetWindowPlacement(hwnd)
                 # Only put it back somewhere that still exists.
                 ox, oy = self.guard.workspace_offset()
