@@ -1877,6 +1877,7 @@ class TrayApp:
         self.icon_watch_stop = None
         self.settings_child = None   # one settings window at a time
         self.window_snapshot = {}   # {hwnd: placement} - the last known good state
+        self.arrangement_undo = {}  # where windows were before the last arrange
         self.windows_frozen = False  # stop snapshotting while a change is underway
         self.last_signature = ""     # only restore when the layout actually changed
         self.verify_left = 0         # remaining late-nudge checks after a restore
@@ -2638,6 +2639,8 @@ class TrayApp:
                 (lambda h: lambda: self._apply_arrangement(h))(mon.hwid),
                 enabled=mon.hwid in saved_hwids, into=apply_menu)
         add_sub("Arrange windows like that again", apply_menu, into=more)
+        add("Undo that arrangement", self._undo_arrangement,
+            enabled=bool(self.arrangement_undo), into=more)
         add("Auto-restore window positions", self._toggle_restore_windows,
             checked=self.cfg.get("restore_windows", True), into=more)
         add("Auto-restore desktop icons", self._toggle_restore_icons,
@@ -2928,6 +2931,15 @@ class TrayApp:
                 except Exception:
                     continue
         placed = 0
+        # Remember where everything was first. Arranging gathers windows in
+        # from other screens, so it can move something the user wanted left
+        # alone - and without this there is no way back from that.
+        undo = {}
+        for hwnd, slot in fill_slots(slots, windows):
+            try:
+                undo[hwnd] = win32gui.GetWindowRect(hwnd)
+            except Exception:
+                continue
         for hwnd, slot in fill_slots(slots, windows):
             mon = self.guard.by_hwid(slot.get("hwid"))
             if mon is None:
@@ -2940,7 +2952,27 @@ class TrayApp:
                 placed += 1
             except Exception:
                 continue
+        self.arrangement_undo = undo if placed else {}
         log.info("arranged %d window(s) from the saved layout", placed)
+
+    def _undo_arrangement(self):
+        """Put the windows an arrangement moved back where they were."""
+        if not self.arrangement_undo:
+            return
+        back = 0
+        for hwnd, rect in self.arrangement_undo.items():
+            try:
+                if not win32gui.IsWindow(hwnd):
+                    continue
+                win32gui.SetWindowPos(hwnd, 0, rect[0], rect[1],
+                                      rect[2] - rect[0], rect[3] - rect[1],
+                                      win32con.SWP_NOZORDER
+                                      | win32con.SWP_NOACTIVATE)
+                back += 1
+            except Exception:
+                continue
+        self.arrangement_undo = {}
+        log.info("put %d window(s) back where they were before arranging", back)
 
     def _show_diagnostics(self):
         """Write the report, put it on the clipboard, and open it.
