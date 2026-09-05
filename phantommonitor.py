@@ -206,6 +206,7 @@ WM_KEYDOWN, WM_SYSKEYDOWN = 0x0100, 0x0104
 WM_APP_HOTKEY = win32con.WM_APP + 1
 WM_APP_ICONS = win32con.WM_APP + 2
 WM_APP_SETTINGS_CLOSED = win32con.WM_APP + 3
+WM_APP_ARRANGE = win32con.WM_APP + 4   # asked for from outside, e.g. a Stream Deck
 
 # Explorer records desktop icon positions here, and rewrites it shortly after
 # they move. Watching this is how icon changes are noticed: Explorer does not
@@ -3060,6 +3061,15 @@ class TrayApp:
             self._icons_moved()
             return 0
 
+        if msg == WM_APP_ARRANGE:
+            # wparam is an index into the display list, or 0 for every display.
+            # An index rather than a hardware id because a window message
+            # carries integers, and the caller should not need to know EDIDs.
+            mons = self.guard.monitors
+            hwid = mons[wparam - 1].hwid if 1 <= wparam <= len(mons) else None
+            self._apply_arrangement(hwid)
+            return 0
+
         if msg == WM_APP_SETTINGS_CLOSED:
             self.settings_child = None
             self._reload_config()      # re-registers hotkeys from the new config
@@ -3322,6 +3332,23 @@ def main():
                   os.path.join(LOG_DIR, "settings.log")
                   if "--settings" in args else None)
     awareness = set_dpi_awareness()
+
+    if "--arrange" in args:
+        # Ask the running guard to do it, rather than starting a second copy
+        # that would arrange windows and immediately exit. This is the hook for
+        # a Stream Deck button or any other launcher.
+        which = 0
+        for a in sys.argv[1:]:
+            if a.isdigit():
+                which = int(a)
+        target = win32gui.FindWindow("PhantomMonitorWnd", None)
+        if not target:
+            print("Phantom Monitor is not running")
+            return 1
+        win32gui.PostMessage(target, WM_APP_ARRANGE, which, 0)
+        print("asked Phantom Monitor to arrange %s"
+              % ("display %d" % which if which else "every display"))
+        return 0
 
     if "--diag" in args:
         print_diagnostics(cfg)

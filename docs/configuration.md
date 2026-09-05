@@ -128,6 +128,7 @@ private. It is gitignored — do not attach it to a bug report.
 | `--diag` | Everything worth pasting into a bug report |
 | `--rescue` | Pull stranded windows back, then exit |
 | `--settings` | Open the settings window |
+| `--arrange [n]` | Ask the running copy to apply a saved arrangement, all displays or just display n |
 | `--no-tray` | Run without a tray icon |
 
 ---

@@ -134,6 +134,22 @@ window handles do not, and it does not break when a page title changes.
 - If a display from the saved arrangement is not attached, its windows are
   skipped
 
+### Triggering it from a Stream Deck or a script
+
+```
+PhantomMonitor.exe --arrange      all displays
+PhantomMonitor.exe --arrange 2    just display 2
+```
+
+That asks the *running* copy to do it rather than starting a second one, so it
+returns immediately and nothing flashes on screen. The number is the display's
+slot as shown in Settings.
+
+A Stream Deck multi-action then reads: open Discord, open Signal, open two
+browser windows, wait a couple of seconds, run `--arrange 2`. One button and
+the screen sets itself up. Windows that are already open are simply moved, so
+pressing it twice is harmless.
+
 This is separate from the automatic restore, which lives in memory and fixes
 what a display change moved. The saved arrangement is on disk and is yours to
 apply whenever.
