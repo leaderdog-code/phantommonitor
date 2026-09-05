@@ -35,7 +35,13 @@ always does. **More info -> Run anyway**, or build it yourself from source.
 
 ## Setup
 
-Run it and **left-click the tray icon** to open Settings. Find your amp in the
+Run it and **left-click the tray icon** to open Settings.
+
+> **Cannot see the icon?** Windows hides new tray icons by default. Click the
+> **^** arrow at the left of the clock and it will be in there. Drag it out onto
+> the taskbar to keep it visible — worth doing, since it is how you reach
+> everything.
+ Find your amp in the
 Displays list and tick **Block windows and pointer** next to it. That is the
 whole setup.
 
