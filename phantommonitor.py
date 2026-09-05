@@ -2544,8 +2544,15 @@ class TrayApp:
         if self.menu_target and is_manageable(self.menu_target, self.cfg):
             pinned_app = process_name(self.menu_target)
             pins = self.cfg.get("app_displays") or {}
-            add('Always open %s on this screen' % (pinned_app or "this app"),
-                self._toggle_pin_app, checked=pinned_app in pins)
+            pin_menu = win32gui.CreatePopupMenu()
+            for mon in self.guard.monitors:
+                add(mon.label(), self._make_pin_action(mon.hwid),
+                    checked=pins.get(pinned_app) == mon.hwid, into=pin_menu)
+            if pinned_app in pins:
+                sep(into=pin_menu)
+                add("Do not pin it anywhere", self._make_pin_action(None),
+                    into=pin_menu)
+            add_sub("Always open %s on" % (pinned_app or "this app"), pin_menu)
 
         move_menu = win32gui.CreatePopupMenu()
         specs = self.cfg.get("hotkeys") or {}
@@ -2771,39 +2778,39 @@ class TrayApp:
         if self.cfg["restore_icons"]:
             self._snapshot_icons("just enabled")
 
-    def _toggle_pin_app(self):
-        """Pin the app in front to whichever screen it is on, or unpin it.
+    def _make_pin_action(self, hwid):
+        """Pin the app in front to a chosen display, or unpin it with None.
 
-        app_displays was configurable only by hand-editing JSON, which for most
-        people means it did not exist. Pinning is inherently about "this app,
-        that screen", and both of those are things the user is already looking
-        at when they reach for the menu.
+        Deliberately a choice of destination rather than "pin it where it is".
+        The screen you want to dedicate is usually one you have already blocked,
+        and blocked screens are exactly the ones you cannot drag a window onto -
+        so "pin it where it is" would mean unblock, drag, pin, re-block. Pick
+        the display and the window is sent there.
         """
-        hwnd = self.menu_target
-        if not hwnd or not is_manageable(hwnd, self.cfg):
-            return
-        app = process_name(hwnd)
-        if not app:
-            return
-        pins = dict(self.cfg.get("app_displays") or {})
-        if app in pins:
-            pins.pop(app)
-            log.info("%s is no longer pinned to a display", app)
-        else:
-            try:
-                rect = win32gui.GetWindowRect(hwnd)
-            except Exception:
+        def action():
+            hwnd = self.menu_target
+            if not hwnd or not is_manageable(hwnd, self.cfg):
                 return
-            mon = monitor_of_rect(rect, self.guard.monitors, require_overlap=True)
-            if mon is None:
-                log.info("%s is not on any display; not pinning", app)
+            app = process_name(hwnd)
+            if not app:
                 return
-            pins[app] = mon.hwid
-            log.info("%s pinned to %s", app, mon.label())
-        self.cfg["app_displays"] = pins
-        save_config(self.cfg)
-        # A pinned display stops being fenced, so the fence has to be redone.
-        self._apply_cursor_clip()
+            pins = dict(self.cfg.get("app_displays") or {})
+            if hwid is None:
+                pins.pop(app, None)
+                log.info("%s is no longer pinned to a display", app)
+            else:
+                pins[app] = hwid
+                mon = self.guard.by_hwid(hwid)
+                log.info("%s pinned to %s", app, mon.label() if mon else hwid)
+            self.cfg["app_displays"] = pins
+            save_config(self.cfg)
+            # A pinned display stops being fenced, so redo the fence before
+            # moving anything - otherwise the window lands somewhere the
+            # pointer still cannot follow.
+            self._apply_cursor_clip()
+            if hwid is not None:
+                self.guard.place_assigned(hwnd)
+        return action
 
     def _show_diagnostics(self):
         """Write the report, put it on the clipboard, and open it.
