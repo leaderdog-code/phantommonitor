@@ -54,6 +54,13 @@ behind the amp for a while without opening Settings.
 Displays are matched by EDID hardware id, not by index, so rules survive
 reboots, cable swaps and port changes.
 
+**You can stop parking the phantom in a far corner.** The usual workaround is to
+drag the fake display diagonally away in Display Settings so the mouse cannot
+easily wander onto it — which then puts a real screen somewhere useless if you
+ever plug one in behind the amp. With the pointer fenced you can leave that
+display wherever it physically belongs, and a screen plugged in behind the amp
+lands somewhere sensible.
+
 Whether it stands aside on its own when a screen wakes up behind the amp
 depends on which rule suits your hardware — see [Block rules](#block-rules).
 
