@@ -69,18 +69,23 @@ of your displays.
 Which form you want depends on how your amp behaves when a screen wakes up
 behind it. There are two kinds, and both were measured here:
 
-| The amp | What changes when a screen wakes up | Rule | Tested on |
+| The amp | When a screen wakes up behind it | Rule | Tested on |
 |---|---|---|---|
-| Passes the screen's EDID upstream | the **id** — Windows sees the screen, not the amp | `YMH3148` | Yamaha HTR-4063 |
-| Keeps its own EDID | the **resolution** — the id never changes | `DON0015@<1280x720` | Denon |
+| Passes the screen's EDID upstream | its **id** disappears — Windows sees the screen | plain id, e.g. `YMH3148` | Yamaha HTR-4063 |
+| Keeps its own EDID | **nothing changes** — same id, same size | tick it by hand | Denon |
 
-Either way the rule stops matching when a real screen is awake, so that display
-becomes an ordinary monitor, and starts matching again once the screen goes and
-the amp reverts. Nothing to switch by hand.
+With the first kind the rule stands itself down when a screen is awake and comes
+back when the screen goes. Nothing to switch.
 
-The `<` form compares total pixels, so it is not fooled by a monitor turned on
-its side. Use an exact `@size` only for a display you are reserving that must
-stay blocked whatever is attached.
+With the second kind there is no signal to work with, so blocking is a tick you
+turn off when you want to use the screen. Do not expect an amp to announce
+itself by dropping to a small resolution — the Denon tested here advertises
+1920x1080 whether or not anything is plugged in behind it.
+
+The `@` forms are for when you want a size condition of your own: pin the amp's
+display to a small resolution deliberately, and `@<1280x720` will then track it.
+That is your configuration doing the work, not the hardware. `<` compares total
+pixels, so it is not fooled by a monitor turned on its side.
 
 Check yours rather than assuming. Run `--diag` with a screen awake behind the
 amp, switch that screen off, **wait several minutes**, and run it again. Amps

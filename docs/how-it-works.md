@@ -46,21 +46,35 @@ unplugged:
 
 | Amp | Nothing behind it | Screen awake behind it | Signal |
 |---|---|---|---|
-| Yamaha HTR-4063 | `YMH3148`, 1920x1080 | `TSB0210` (the TV's id), same size | the **id** |
-| Denon | `DON0015`, 800x600 | `DON0015`, 1920x1080 | the **resolution** |
+| Yamaha HTR-4063 | `YMH3148` | `TSB0210` — the TV's own id | the **id** |
+| Denon | `DON0015`, EDID prefers 1920x1080i | `DON0015`, EDID prefers 1920x1080 | **none** |
 
-The Yamaha passes the downstream EDID upstream, so Windows sees the TV and not
-the amp. Its resolution is identical either way, so no size rule would ever have
-caught it.
+The Yamaha passes the downstream EDID upstream, so Windows sees the TV rather
+than the amp. Its resolution is identical in both states, so no size rule would
+ever have caught it. The id is the whole signal.
 
-The Denon does not pass it through. Plugging a monitor in left the id and the
-name untouched — still `DON0015`, still "DENON-AVAMP" — and only the resolution
-moved, 800x600 to 1920x1080. It presents its own EDID and offers whatever modes
-the screen behind it can take.
+The Denon does not pass it through, and offers nothing else either. Plugging a
+monitor in left the id and the name untouched — still `DON0015`, still
+"DENON-AVAMP". Reading its EDID directly in both states shows it advertising
+1920x1080 whether or not anything is attached; with nothing behind it the
+preferred timing is 1920x1080 **interlaced** at 74.25 MHz, which is a broadcast
+TV timing, because a TV is what it expects downstream.
 
-So passing EDID upstream is what a repeater is *specified* to do, but it is not
-what they all do. Check yours rather than reasoning from the spec — this project
-got it wrong in both directions before testing it.
+So passing EDID upstream is what a repeater is *specified* to do, and not what
+they all do. Where an amp does not, there may be no automatic signal at all, and
+a manual tick is the honest answer.
+
+### A warning about resolution as a signal
+
+This project spent a long time believing the Denon "dropped to 800x600 when
+nothing was attached", and built a whole rule form around it. It does not. The
+test machine simply had that display *set* to 800x600 by hand years earlier, and
+Windows was restoring the chosen mode.
+
+The mistake survived because Windows' reported resolution was taken as the
+amp's behaviour. Reading the EDID directly is what settled it. If you are
+working out what your own amp does, read what it advertises rather than what
+Windows happens to be using.
 
 **Neither advertises a small "fallback" resolution.** Both offer modes up to
 1920x1080 with nothing attached. Earlier notes claimed the Denon dropped to
