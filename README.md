@@ -38,6 +38,11 @@ always does. **More info -> Run anyway**, or build it yourself from source.
 Run it, **left-click the tray icon** to open Settings, and tick the display you
 want blocked. That is the whole setup.
 
+**If nothing is ever plugged in behind your amp, you are done.** Tick it and
+forget it — windows stay off it and the pointer cannot reach it. Everything
+below about rules and detection is only for people who *sometimes* put a real
+screen behind the amp and want blocking to get out of the way by itself.
+
 Right-click the icon for everything else, including a **Block** tick per display
 — handy for letting yourself use a screen behind the amp for a while without
 going into Settings.
@@ -98,6 +103,9 @@ the preferred timing out of its EDID. If that says 1920x1080 with no screen
 attached, the amp is not signalling anything and size alone will not help you.
 
 ### Which rule to use
+
+Only needed if you sometimes use a screen behind the amp. If nothing is ever
+back there, tick it and skip this section.
 
 Right-click the tray icon and choose **Diagnose my displays...**. It opens a
 report naming every display, what each one is *asking for*, and the rule to try
