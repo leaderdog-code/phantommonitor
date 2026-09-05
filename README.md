@@ -128,8 +128,8 @@ Two units, one household. Nobody is going to buy a dozen receivers across four
 eras to fill this table in, so it grows by report or not at all.
 
 **Please add yours.** Use **Which rule should I use?** twice — once with a
-screen awake behind the amp, once several minutes after switching that screen
-off — and paste both into an issue. It copies itself to the clipboard each
+screen awake behind the amp, once a few minutes after switching that screen off
+— and paste both into an issue. It copies itself to the clipboard each
 time. The "it asks for" line is the one that matters. Every model added is one
 more that works out of the box for whoever turns up next with the same
 problem.
@@ -159,9 +159,14 @@ monitor turned on its side. Use an exact `@1920x1080` only for a display you are
 reserving that must stay blocked whatever is attached.
 
 Check yours rather than assuming. Use **Which rule should I use?** with a screen
-awake behind the amp, switch that screen off, **wait several minutes**, and look
-again. Amps hold on to the last screen's details for some minutes, so an
-immediate second look shows no change and tells you nothing.
+awake behind the amp, switch that screen off, **give it a few minutes**, and look
+again.
+
+The wait matters. An amp keeps serving the last screen's details for a while
+after it goes dark, so looking straight away shows no change and tells you
+nothing. How long varies by hardware and neither amp here has been timed
+properly, so if the first re-check shows nothing, leave it five minutes and look
+once more before concluding there is no signal.
 
 ## Dedicating a screen to one app
 

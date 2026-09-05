@@ -30,7 +30,7 @@ EngineerZone).
 | Direction | Delay | Why |
 |---|---|---|
 | Screen **on** | seconds | HPD fires, the real EDID is read at once |
-| Screen **off** | minutes | Nothing fires; the amp ages out its cache |
+| Screen **off** | a while — varies | Nothing fires; the amp ages out its cache |
 
 Switching a screen on releases blocking almost immediately. Switching it off
 waits out the amp's cache, so there is a window where the phantom is not yet
@@ -98,7 +98,7 @@ the phantom happens to sit at a resolution smaller than a real screen would use
 doing the work, not the amp announcing itself.
 
 `--diag` tells you which you have. Compare it with a screen awake behind the
-amp, and again several minutes after switching that screen off.
+amp, and again a few minutes after switching that screen off.
 
 ## What the cable path decides
 
