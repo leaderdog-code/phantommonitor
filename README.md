@@ -88,10 +88,27 @@ likely to pass EDID through, since 4K, HDR and eARC all need the amp to
 negotiate with the real display. Do not assume yours behaves like a Denon or a
 Yamaha because of the badge — run `--diag` and look.
 
-The `@` forms are for when you want a size condition of your own: pin the amp's
-display to a small resolution deliberately, and `@<1280x720` will then track it.
-That is your configuration doing the work, not the hardware. `<` compares total
-pixels, so it is not fooled by a monitor turned on its side.
+### Making an amp automatic when it gives no signal
+
+You can create the signal yourself. With nothing plugged in behind the amp, set
+that display to something small — 800x600 — and use `@<1280x720`. Windows
+remembers modes per display arrangement, so:
+
+- Nothing attached → Windows restores 800x600 → the rule matches → blocked
+- Monitor attached → Windows uses the monitor's proper resolution → not blocked
+
+**This costs you nothing.** While nothing is plugged in, that display is
+invisible; its resolution is a number on a screen nobody can see. Plug a real
+monitor in and it runs at full resolution as normal — the small setting applies
+only to the arrangement where there is no screen.
+
+The one thing to avoid is setting that display *large* while nothing is
+attached, because Windows will remember that instead and the rule will quietly
+stop matching.
+
+`<` compares total pixels rather than width and height, so it is not fooled by a
+monitor turned on its side. Use an exact `@1920x1080` only for a display you are
+reserving that must stay blocked whatever is attached.
 
 Check yours rather than assuming. Run `--diag` with a screen awake behind the
 amp, switch that screen off, **wait several minutes**, and run it again. Amps
