@@ -179,6 +179,148 @@ def zoom_factor(cfg, root=None):
     return windows_scale(root) if root is not None else 1.0
 
 
+def build_arrangements_tab(tabs, config_path):
+    """Manage saved arrangements: see what is in them, rename, delete, apply.
+
+    Applying belongs in the tray, where it is one click. Managing does not -
+    renaming and deleting were impossible from a menu, and a menu cannot show
+    you what an arrangement actually contains.
+    """
+    import ctypes
+    path = os.path.join(os.path.dirname(os.path.abspath(config_path)),
+                        "arrangement.json")
+
+    page = ttk.Frame(tabs)
+    tabs.add(page, text="  Arrangements  ")
+    page.rowconfigure(1, weight=1)
+    page.columnconfigure(0, weight=1)
+
+    ttk.Label(page, justify="left", text=(
+        "Saved layouts of your windows. Save one from the tray menu, then\n"
+        "apply it whenever - after a reboot, or when switching to a different\n"
+        "job. Each remembers which display every window belongs on.")).grid(
+        row=0, column=0, columnspan=2, sticky="w", padx=10, pady=(10, 6))
+
+    listing = tk.Listbox(page, height=8, exportselection=False)
+    listing.grid(row=1, column=0, sticky="nsew", padx=(10, 4), pady=4)
+    detail = ttk.Label(page, justify="left", foreground="#555", text="")
+    detail.grid(row=2, column=0, columnspan=2, sticky="w", padx=10, pady=(0, 8))
+
+    side = ttk.Frame(page)
+    side.grid(row=1, column=1, sticky="n", padx=(0, 10), pady=4)
+
+    def read():
+        try:
+            with open(path, "r", encoding="utf-8") as handle:
+                data = json.load(handle) or {}
+        except (OSError, ValueError):
+            return {}
+        if isinstance(data.get("modes"), dict):
+            return dict((k, v.get("slots") or [])
+                        for k, v in data["modes"].items())
+        return {"Saved layout": data["slots"]} if data.get("slots") else {}
+
+    def write(modes):
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({"modes": dict((k, {"slots": v})
+                                         for k, v in modes.items())},
+                          handle, indent=2)
+        except OSError:
+            pass
+
+    def refresh(select=None):
+        listing.delete(0, tk.END)
+        for name in sorted(read()):
+            listing.insert(tk.END, name)
+        if select:
+            names = sorted(read())
+            if select in names:
+                listing.selection_set(names.index(select))
+        describe()
+
+    def chosen():
+        sel = listing.curselection()
+        return listing.get(sel[0]) if sel else None
+
+    def describe(*_a):
+        name = chosen()
+        if not name:
+            detail.configure(text="")
+            return
+        slots = read().get(name) or []
+        apps = {}
+        for slot in slots:
+            apps[slot.get("app", "?")] = apps.get(slot.get("app", "?"), 0) + 1
+        screens = len(set(x.get("hwid") for x in slots))
+        detail.configure(text="%d window%s across %d display%s: %s" % (
+            len(slots), "" if len(slots) == 1 else "s",
+            screens, "" if screens == 1 else "s",
+            ", ".join("%s x%d" % (a, n) if n > 1 else a
+                      for a, n in sorted(apps.items())) or "nothing"))
+
+    listing.bind("<<ListboxSelect>>", describe)
+
+    def rename():
+        name = chosen()
+        if not name:
+            return
+        top = tk.Toplevel(page)
+        top.title("Rename")
+        top.transient(page.winfo_toplevel())
+        var = tk.StringVar(value=name)
+        ttk.Entry(top, textvariable=var, width=30).grid(row=0, column=0,
+                                                        padx=12, pady=12)
+
+        def ok(*_a):
+            new_name = var.get().strip()
+            top.destroy()
+            if new_name and new_name != name:
+                modes = read()
+                modes[new_name] = modes.pop(name)
+                write(modes)
+                refresh(new_name)
+
+        ttk.Button(top, text="Rename", command=ok).grid(row=0, column=1,
+                                                        padx=(0, 12))
+        top.bind("<Return>", ok)
+        top.grab_set()
+
+    def delete():
+        name = chosen()
+        if not name:
+            return
+        modes = read()
+        modes.pop(name, None)
+        write(modes)
+        refresh()
+
+    def apply_now():
+        name = chosen()
+        if not name:
+            return
+        # The guard owns the windows, so ask it rather than moving anything
+        # from here. WM_APP + 5 carries the name via a shared file, which is
+        # simpler than marshalling a string through a window message.
+        try:
+            with open(path + ".apply", "w", encoding="utf-8") as handle:
+                handle.write(name)
+            hwnd = ctypes.windll.user32.FindWindowW("PhantomMonitorWnd", None)
+            if hwnd:
+                ctypes.windll.user32.PostMessageW(hwnd, 0x8000 + 5, 0, 0)
+        except OSError:
+            pass
+
+    ttk.Button(side, text="Apply now", command=apply_now).grid(
+        row=0, column=0, sticky="ew", pady=(0, 6))
+    ttk.Button(side, text="Rename...", command=rename).grid(
+        row=1, column=0, sticky="ew", pady=(0, 6))
+    ttk.Button(side, text="Delete", command=delete).grid(
+        row=2, column=0, sticky="ew")
+
+    refresh()
+
+
 def run(config_path, monitors, absent=()):
     """monitors: list of (name, hwid, width, height, x, y, primary).
 
@@ -197,7 +339,13 @@ def run(config_path, monitors, absent=()):
     # button somewhere unreachable.
     root.rowconfigure(0, weight=1)
     root.columnconfigure(0, weight=1)
-    outer = ttk.Frame(root)
+    tabs = ttk.Notebook(root)
+    tabs.grid(row=0, column=0, sticky="nsew")
+    displays_tab = ttk.Frame(tabs)
+    tabs.add(displays_tab, text="  Displays  ")
+    displays_tab.rowconfigure(0, weight=1)
+    displays_tab.columnconfigure(0, weight=1)
+    outer = ttk.Frame(displays_tab)
     outer.grid(row=0, column=0, sticky="nsew")
     outer.rowconfigure(0, weight=1)
     outer.columnconfigure(0, weight=1)
@@ -487,4 +635,5 @@ def run(config_path, monitors, absent=()):
                                   py + (ph - root.winfo_height()) // 3))
     root.attributes("-topmost", True)
     root.after(300, lambda: root.attributes("-topmost", False))
+    build_arrangements_tab(tabs, config_path)
     root.mainloop()

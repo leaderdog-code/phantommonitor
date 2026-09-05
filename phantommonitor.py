@@ -208,6 +208,7 @@ WM_APP_HOTKEY = win32con.WM_APP + 1
 WM_APP_ICONS = win32con.WM_APP + 2
 WM_APP_SETTINGS_CLOSED = win32con.WM_APP + 3
 WM_APP_ARRANGE = win32con.WM_APP + 4   # asked for from outside, e.g. a Stream Deck
+WM_APP_ARRANGE_NAMED = win32con.WM_APP + 5   # the settings window, via a file
 
 # Explorer records desktop icon positions here, and rewrites it shortly after
 # they move. Watching this is how icon changes are noticed: Explorer does not
@@ -3266,6 +3267,21 @@ class TrayApp:
             mons = self.guard.monitors
             hwid = mons[wparam - 1].hwid if 1 <= wparam <= len(mons) else None
             self._apply_arrangement(hwid, launch=bool(lparam))
+            return 0
+
+        if msg == WM_APP_ARRANGE_NAMED:
+            # The name arrives in a small file beside the arrangements, because
+            # a window message carries integers and marshalling a string is far
+            # more trouble than one line of text.
+            note = ARRANGEMENT_PATH + ".apply"
+            try:
+                with open(note, "r", encoding="utf-8") as handle:
+                    wanted = handle.read().strip()
+                os.remove(note)
+            except OSError:
+                wanted = ""
+            if wanted:
+                self._apply_arrangement(mode=wanted)
             return 0
 
         if msg == WM_APP_SETTINGS_CLOSED:

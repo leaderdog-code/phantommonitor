@@ -145,6 +145,14 @@ window handles do not, and it does not break when a page title changes.
 - If a display from the saved arrangement is not attached, its windows are
   skipped
 
+### Managing them
+
+Settings has an **Arrangements** tab listing what you have saved, what is in
+each one — how many windows, which apps, how many displays — and buttons to
+apply, rename or delete. The tray is for applying one quickly; renaming and
+deleting were impossible from a menu, and a menu cannot show you what an
+arrangement contains.
+
 ### Opening what is missing
 
 **Settings and more ▸ Set this screen up, opening what is missing** starts
