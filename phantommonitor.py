@@ -68,6 +68,7 @@ LOG_DIR = os.path.join(DATA_DIR, "logs")
 LOG_PATH = os.path.join(LOG_DIR, "phantommonitor.log")
 ICON_LAYOUT_PATH = os.path.join(DATA_DIR, "icon_layouts.json")
 ARRANGEMENT_PATH = os.path.join(DATA_DIR, "arrangement.json")
+ARRANGEMENT_UNDO_PATH = os.path.join(DATA_DIR, "arrangement_undo.json")
 PROJECT_URL = "https://github.com/leaderdog-code/phantommonitor"
 RELEASES_URL = PROJECT_URL + "/releases"
 LATEST_API = "https://api.github.com/repos/leaderdog-code/phantommonitor/releases/latest"
@@ -1877,7 +1878,6 @@ class TrayApp:
         self.icon_watch_stop = None
         self.settings_child = None   # one settings window at a time
         self.window_snapshot = {}   # {hwnd: placement} - the last known good state
-        self.arrangement_undo = {}  # where windows were before the last arrange
         self.windows_frozen = False  # stop snapshotting while a change is underway
         self.last_signature = ""     # only restore when the layout actually changed
         self.verify_left = 0         # remaining late-nudge checks after a restore
@@ -2640,7 +2640,8 @@ class TrayApp:
                 enabled=mon.hwid in saved_hwids, into=apply_menu)
         add_sub("Arrange windows like that again", apply_menu, into=more)
         add("Undo that arrangement", self._undo_arrangement,
-            enabled=bool(self.arrangement_undo), into=more)
+            enabled=bool(self._load_arrangement(ARRANGEMENT_UNDO_PATH)),
+            into=more)
         add("Auto-restore window positions", self._toggle_restore_windows,
             checked=self.cfg.get("restore_windows", True), into=more)
         add("Auto-restore desktop icons", self._toggle_restore_icons,
@@ -2869,12 +2870,21 @@ class TrayApp:
     # did that display change just move?". This is on disk and answers "put my
     # screen back the way I like it", which is a thing you want after a reboot,
     # when the snapshot is long gone.
-    def _load_arrangement(self):
+    def _load_arrangement(self, path=None):
         try:
-            with open(ARRANGEMENT_PATH, "r", encoding="utf-8") as handle:
+            with open(path or ARRANGEMENT_PATH, "r", encoding="utf-8") as handle:
                 return (json.load(handle) or {}).get("slots") or []
         except (OSError, ValueError):
             return []
+
+    def _write_arrangement(self, slots, path):
+        try:
+            with open(path, "w", encoding="utf-8") as handle:
+                json.dump({"slots": slots}, handle, indent=2)
+            return True
+        except OSError as exc:
+            log.error("could not write %s: %s", os.path.basename(path), exc)
+            return False
 
     def _save_arrangement(self, only_hwid=None):
         slots = []
@@ -2914,8 +2924,8 @@ class TrayApp:
             return
         log.info("saved an arrangement of %d window(s)", len(slots))
 
-    def _apply_arrangement(self, only_hwid=None):
-        slots = self._load_arrangement()
+    def _apply_arrangement(self, only_hwid=None, path=None, reason="saved layout"):
+        slots = self._load_arrangement(path)
         if not slots:
             log.info("no saved arrangement yet - use Save first")
             return
@@ -2934,10 +2944,20 @@ class TrayApp:
         # Remember where everything was first. Arranging gathers windows in
         # from other screens, so it can move something the user wanted left
         # alone - and without this there is no way back from that.
-        undo = {}
+        # The state before an arrange is itself just an arrangement, so store
+        # it as one: slots per app, on disk. Keeping it as window handles in
+        # memory meant a restart or a reboot silently threw the undo away, and
+        # a handle means nothing after either.
+        undo = []
         for hwnd, slot in fill_slots(slots, windows):
             try:
-                undo[hwnd] = win32gui.GetWindowRect(hwnd)
+                rect = win32gui.GetWindowRect(hwnd)
+                was = monitor_of_rect(rect, self.guard.monitors,
+                                      require_overlap=True)
+                if was is None:
+                    continue
+                undo.append({"app": process_name(hwnd), "hwid": was.hwid,
+                             "rel": list(offset_in(rect, was))})
             except Exception:
                 continue
         for hwnd, slot in fill_slots(slots, windows):
@@ -2964,27 +2984,13 @@ class TrayApp:
                 placed += 1
             except Exception:
                 continue
-        self.arrangement_undo = undo if placed else {}
-        log.info("arranged %d window(s) from the saved layout", placed)
+        if placed:
+            self._write_arrangement(undo, ARRANGEMENT_UNDO_PATH)
+        log.info("arranged %d window(s) from the %s", placed, reason)
 
     def _undo_arrangement(self):
         """Put the windows an arrangement moved back where they were."""
-        if not self.arrangement_undo:
-            return
-        back = 0
-        for hwnd, rect in self.arrangement_undo.items():
-            try:
-                if not win32gui.IsWindow(hwnd):
-                    continue
-                win32gui.SetWindowPos(hwnd, 0, rect[0], rect[1],
-                                      rect[2] - rect[0], rect[3] - rect[1],
-                                      win32con.SWP_NOZORDER
-                                      | win32con.SWP_NOACTIVATE)
-                back += 1
-            except Exception:
-                continue
-        self.arrangement_undo = {}
-        log.info("put %d window(s) back where they were before arranging", back)
+        self._apply_arrangement(path=ARRANGEMENT_UNDO_PATH, reason="undo")
 
     def _show_diagnostics(self):
         """Write the report, put it on the clipboard, and open it.

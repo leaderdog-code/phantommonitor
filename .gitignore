@@ -16,6 +16,7 @@ icons_backup*.json
 # the template; PhantomMonitor writes config.json itself on first run.
 config.json
 arrangement.json
+arrangement_undo.json
 config.json.bak
 config.json.*
 
