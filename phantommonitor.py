@@ -2492,6 +2492,14 @@ class TrayApp:
         add("Rescue windows now",
             lambda: self.guard.sweep("manual", include_offscreen=True))
 
+        # Pinning is "this app, that screen", and both are in front of the user
+        # at the moment they open this menu.
+        if self.menu_target and is_manageable(self.menu_target, self.cfg):
+            pinned_app = process_name(self.menu_target)
+            pins = self.cfg.get("app_displays") or {}
+            add('Always open %s on this screen' % (pinned_app or "this app"),
+                self._toggle_pin_app, checked=pinned_app in pins)
+
         move_menu = win32gui.CreatePopupMenu()
         specs = self.cfg.get("hotkeys") or {}
         for mon in self.guard.monitors:
@@ -2715,6 +2723,40 @@ class TrayApp:
                  "on" if self.cfg["restore_icons"] else "off")
         if self.cfg["restore_icons"]:
             self._snapshot_icons("just enabled")
+
+    def _toggle_pin_app(self):
+        """Pin the app in front to whichever screen it is on, or unpin it.
+
+        app_displays was configurable only by hand-editing JSON, which for most
+        people means it did not exist. Pinning is inherently about "this app,
+        that screen", and both of those are things the user is already looking
+        at when they reach for the menu.
+        """
+        hwnd = self.menu_target
+        if not hwnd or not is_manageable(hwnd, self.cfg):
+            return
+        app = process_name(hwnd)
+        if not app:
+            return
+        pins = dict(self.cfg.get("app_displays") or {})
+        if app in pins:
+            pins.pop(app)
+            log.info("%s is no longer pinned to a display", app)
+        else:
+            try:
+                rect = win32gui.GetWindowRect(hwnd)
+            except Exception:
+                return
+            mon = monitor_of_rect(rect, self.guard.monitors, require_overlap=True)
+            if mon is None:
+                log.info("%s is not on any display; not pinning", app)
+                return
+            pins[app] = mon.hwid
+            log.info("%s pinned to %s", app, mon.label())
+        self.cfg["app_displays"] = pins
+        save_config(self.cfg)
+        # A pinned display stops being fenced, so the fence has to be redone.
+        self._apply_cursor_clip()
 
     def _show_diagnostics(self):
         """Write the report, put it on the clipboard, and open it.

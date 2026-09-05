@@ -212,16 +212,38 @@ before concluding there is no signal.
 
 ## Dedicating a screen to one app
 
-Blocking alone empties a display. To reserve one — a chat monitor, a dashboard
-— block it *and* pin what belongs there:
+Say you want one screen to be *the Discord screen*, or the dashboard, or the
+chat monitor for a stream. Two steps:
+
+1. Put the app on that screen, then right-click the tray icon and choose
+   **Always open discord.exe on this screen**. (The menu names whatever app you
+   used last, so put it in front first.)
+2. Tick **Block windows and pointer** for that display, in Settings or from the
+   tray.
+
+From then on that screen holds only what you pinned to it. Discord opens there
+every time, nothing else lands there, and the app is never moved off it.
+
+**You can still use that screen normally.** Click on it, type on it, drag things
+around on it. Blocking stops *other* windows arriving; it does not lock you out.
+The pointer fence skips any display with something pinned to it, precisely so a
+chat monitor is one you can answer on.
+
+Placement happens when a window **opens**. Drag it somewhere else afterwards and
+it stays where you put it — the pin decides where things start, it does not
+police them.
+
+<details>
+<summary>Doing it by hand in config.json</summary>
 
 ```json
-"app_displays": { "discord.exe": "GSM7814" }
+"app_displays": { "discord.exe": "GSM7814", "obs64.exe": "GSM7814" }
 ```
 
-Pinned apps open on that display and are never evacuated from it. Everything
-else is kept off. The pointer fence skips displays with something pinned to
-them, so you can still click and type there.
+Several apps can share one screen. Hardware ids are shown in Settings beside
+each display.
+
+</details>
 
 ## Games
 
