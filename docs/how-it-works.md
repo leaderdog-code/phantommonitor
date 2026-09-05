@@ -35,8 +35,10 @@ EngineerZone).
 The off direction varies by hardware and is worth measuring rather than
 guessing. On the **Denon AVR-790**, timed with a stopwatch from pressing the
 monitor's power button to the pointer being fenced again: **1 minute 5
-seconds**, cross-checked against the guard log. The Yamaha appeared to take
-longer but was never timed from the button, so no figure is claimed for it.
+seconds**, cross-checked against the guard log. The panel itself took about a
+second to actually power down after the button, so the interval the amp saw was
+a second shorter. The Yamaha appeared to take longer but was never timed from
+the button, so no figure is claimed for it.
 
 Every other duration this project quoted was the gap between two log lines,
 which is not the same as the time since somebody switched a screen off. Three
