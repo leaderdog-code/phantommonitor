@@ -143,21 +143,36 @@ window handles do not, and it does not break when a page title changes.
 - If a display from the saved arrangement is not attached, its windows are
   skipped
 
+### Opening what is missing
+
+**Settings and more ▸ Set this screen up, opening what is missing** starts
+anything the layout needs that is not already open, waits for it, then arranges
+everything. The executable is recorded when you save the arrangement.
+
+It also handles apps sitting in the notification area. One of those cannot be
+shown from outside — forcing its window visible gives an empty black frame,
+because the app has suspended drawing while hidden. Running the program again
+works, because single-instance apps respond by showing their own window
+properly.
+
+Kept separate from plain arranging on purpose: starting programs should never
+happen as a side effect of tidying a screen.
+
 ### Triggering it from a Stream Deck or a script
 
 ```
-PhantomMonitor.exe --arrange      all displays
-PhantomMonitor.exe --arrange 2    just display 2
+PhantomMonitor.exe --arrange           all displays
+PhantomMonitor.exe --arrange 2         just display 2
+PhantomMonitor.exe --arrange 2 --open  open what is missing first
 ```
 
 That asks the *running* copy to do it rather than starting a second one, so it
 returns immediately and nothing flashes on screen. The number is the display's
 slot as shown in Settings.
 
-A Stream Deck multi-action then reads: open Discord, open Signal, open two
-browser windows, wait a couple of seconds, run `--arrange 2`. One button and
-the screen sets itself up. Windows that are already open are simply moved, so
-pressing it twice is harmless.
+With `--open`, a Stream Deck button is a single action: `--arrange 2 --open`
+starts whatever is missing, waits for it and lays the screen out. Windows
+already open are simply moved, so pressing it twice is harmless.
 
 This is separate from the automatic restore, which lives in memory and fixes
 what a display change moved. The saved arrangement is on disk and is yours to

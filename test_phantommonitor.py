@@ -579,6 +579,31 @@ check("a single-display game still holds the pointer",
       mg.cursor_lock_rect(ONE.rect, ALL, [], "somegame.exe",
                           [], [], True, True) == ONE.rect)
 
+# Launching what is missing. An app hidden in the notification area cannot be
+# shown from outside - forcing its window visible gives an empty frame, since it
+# has suspended drawing. Running the program again works, because the app shows
+# its own window. Verified on Signal: hidden and untouched for five seconds,
+# then visible one second after the relaunch, and painted properly.
+LSLOTS = [{"app": "brave.exe", "exe": "C:/b.exe", "rel": [0, 0, 8, 6]},
+          {"app": "brave.exe", "exe": "C:/b.exe", "rel": [8, 0, 6, 9]},
+          {"app": "signal.exe", "exe": "C:/s.exe", "rel": [0, 6, 8, 4]}]
+check("nothing running means launch them all",
+      mg.missing_launches(LSLOTS, []) == {"C:/b.exe": 2, "C:/s.exe": 1})
+check("one already open means launch one fewer",
+      mg.missing_launches(LSLOTS, [(1, "brave.exe")])["C:/b.exe"] == 1)
+check("everything open means launch nothing",
+      mg.missing_launches(LSLOTS, [(1, "brave.exe"), (2, "brave.exe"),
+                                   (3, "signal.exe")]) == {})
+check("more windows than slots launches nothing",
+      "C:/b.exe" not in mg.missing_launches(
+          LSLOTS, [(1, "brave.exe"), (2, "brave.exe"), (3, "brave.exe")]))
+check("a slot with no recorded exe cannot be launched",
+      mg.missing_launches([{"app": "x.exe", "rel": [0, 0, 8, 6]}], []) == {})
+check("launch count is capped",
+      all(v <= 3 for v in mg.missing_launches(
+          [{"app": "a.exe", "exe": "C:/a.exe", "rel": [0, 0, 1, 1]}] * 9,
+          []).values()))
+
 # A saved arrangement is slots per application, deliberately interchangeable:
 # "two Brave windows go in these two rectangles", not "this window goes here".
 # Handles die at reboot and titles change as you browse, and which browser is

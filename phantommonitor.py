@@ -869,6 +869,55 @@ def fill_slots(slots, windows):
     return pairs
 
 
+def exe_path(hwnd):
+    """Full path of the program owning a window, or "" if it cannot be read."""
+    try:
+        _tid, pid = win32process.GetWindowThreadProcessId(hwnd)
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,
+                                      False, pid)
+        if not handle:
+            return ""
+        try:
+            size = wt.DWORD(1024)
+            buf = ctypes.create_unicode_buffer(1024)
+            if kernel32.QueryFullProcessImageNameW(handle, 0, buf,
+                                                   ctypes.byref(size)):
+                return buf.value
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        pass
+    return ""
+
+
+def missing_launches(slots, windows):
+    """How many more windows each app needs, as {exe path: count}.
+
+    An app minimized to the notification area cannot be shown from outside -
+    forcing its window visible gives an empty frame, because it has suspended
+    drawing. Running the program again works, because single-instance apps
+    handle that themselves and show their own window properly. The same call
+    starts an app that was not running at all.
+    """
+    have = {}
+    for _hwnd, app in windows:
+        have[app] = have.get(app, 0) + 1
+    want, paths = {}, {}
+    for slot in slots:
+        app = (slot.get("app") or "").lower()
+        if not app:
+            continue
+        want[app] = want.get(app, 0) + 1
+        if slot.get("exe"):
+            paths.setdefault(app, slot["exe"])
+    out = {}
+    for app, count in want.items():
+        short = count - have.get(app, 0)
+        if short > 0 and paths.get(app):
+            out[paths[app]] = min(short, 3)   # never a runaway
+    return out
+
+
 def parse_block_spec(spec):
     """Parse a block rule into (hwid, size, smaller_than, interlaced_only).
 
@@ -2639,6 +2688,17 @@ class TrayApp:
                 (lambda h: lambda: self._apply_arrangement(h))(mon.hwid),
                 enabled=mon.hwid in saved_hwids, into=apply_menu)
         add_sub("Arrange windows like that again", apply_menu, into=more)
+
+        # Separate from plain arranging, because this starts programs and that
+        # should never happen as a side effect of tidying a screen.
+        setup_menu = win32gui.CreatePopupMenu()
+        for mon in self.guard.monitors:
+            add(mon.label(),
+                (lambda h: lambda: self._apply_arrangement(
+                    h, reason="saved layout", launch=True))(mon.hwid),
+                enabled=mon.hwid in saved_hwids, into=setup_menu)
+        add_sub("Set this screen up, opening what is missing", setup_menu,
+                into=more)
         add("Undo that arrangement", self._undo_arrangement,
             enabled=bool(self._load_arrangement(ARRANGEMENT_UNDO_PATH)),
             into=more)
@@ -2905,7 +2965,8 @@ class TrayApp:
             if only_hwid and mon.hwid != only_hwid:
                 continue
             slots.append({"app": app, "hwid": mon.hwid,
-                          "rel": list(offset_in(rect, mon))})
+                          "rel": list(offset_in(rect, mon)),
+                          "exe": exe_path(hwnd)})
         if not slots:
             log.info("nothing to save")
             return
@@ -2924,22 +2985,44 @@ class TrayApp:
             return
         log.info("saved an arrangement of %d window(s)", len(slots))
 
-    def _apply_arrangement(self, only_hwid=None, path=None, reason="saved layout"):
+    def _apply_arrangement(self, only_hwid=None, path=None,
+                           reason="saved layout", launch=False):
         slots = self._load_arrangement(path)
         if not slots:
             log.info("no saved arrangement yet - use Save first")
             return
         if only_hwid:
             slots = [x for x in slots if x.get("hwid") == only_hwid]
-        windows = []
-        hwnds = []
-        win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
-        for hwnd in hwnds:
-            if is_manageable(hwnd, self.cfg):
-                try:
-                    windows.append((hwnd, process_name(hwnd)))
-                except Exception:
-                    continue
+        def open_windows():
+            found, hwnds = [], []
+            win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
+            for hwnd in hwnds:
+                if is_manageable(hwnd, self.cfg):
+                    try:
+                        found.append((hwnd, process_name(hwnd)))
+                    except Exception:
+                        continue
+            return found
+
+        windows = open_windows()
+        if launch:
+            for exe, count in missing_launches(slots, windows).items():
+                for _ in range(count):
+                    try:
+                        subprocess.Popen([exe])
+                        log.info("started %s", os.path.basename(exe))
+                    except OSError as exc:
+                        log.warning("could not start %s: %s", exe, exc)
+                        break
+                    time.sleep(0.4)
+            # Give them a moment to appear, but do not hang about if they do
+            # not - a program that fails to start should not block the rest.
+            deadline = time.monotonic() + 8
+            while time.monotonic() < deadline:
+                time.sleep(0.5)
+                windows = open_windows()
+                if not missing_launches(slots, windows):
+                    break
         placed = 0
         # Remember where everything was first. Arranging gathers windows in
         # from other screens, so it can move something the user wanted left
@@ -3117,7 +3200,7 @@ class TrayApp:
             # carries integers, and the caller should not need to know EDIDs.
             mons = self.guard.monitors
             hwid = mons[wparam - 1].hwid if 1 <= wparam <= len(mons) else None
-            self._apply_arrangement(hwid)
+            self._apply_arrangement(hwid, launch=bool(lparam))
             return 0
 
         if msg == WM_APP_SETTINGS_CLOSED:
@@ -3395,7 +3478,8 @@ def main():
         if not target:
             print("Phantom Monitor is not running")
             return 1
-        win32gui.PostMessage(target, WM_APP_ARRANGE, which, 0)
+        win32gui.PostMessage(target, WM_APP_ARRANGE, which,
+                             1 if "--open" in args else 0)
         print("asked Phantom Monitor to arrange %s"
               % ("display %d" % which if which else "every display"))
         return 0
