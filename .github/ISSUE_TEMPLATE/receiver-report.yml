@@ -1,0 +1,58 @@
+name: Receiver report
+description: Tell us what your AV receiver, soundbar or HDMI device does
+title: "[receiver] "
+labels: ["receiver-report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Behaviour varies by model, not by brand, and we only have two units to
+        test with. Every report makes the app work out of the box for someone
+        else with the same hardware.
+
+        You need `--diag` output **twice**: once with a screen awake behind the
+        amp, once several minutes after switching that screen off. The delay
+        matters — amps hold the last EDID for some minutes, so an immediate
+        second look shows no change and tells you nothing.
+  - type: input
+    id: model
+    attributes:
+      label: Make and model
+      placeholder: Denon AVR-790, Yamaha HTR-4063, Sonos Arc...
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: How is it connected to the PC?
+      options:
+        - Native HDMI port on the graphics card
+        - Through a DisplayPort-to-HDMI adapter
+        - Through a switch, splitter or KVM
+        - Not sure
+    validations:
+      required: true
+  - type: textarea
+    id: with-screen
+    attributes:
+      label: --diag with a screen awake behind it
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: without-screen
+    attributes:
+      label: --diag several minutes after switching that screen off
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: rule
+    attributes:
+      label: Which rule ended up working?
+      placeholder: plain id / @interlaced / @<1280x720 / had to tick it by hand
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else worth knowing
+      placeholder: Settings you changed on the amp, how long it took to let go...

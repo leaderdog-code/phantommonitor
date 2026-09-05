@@ -1,0 +1,25 @@
+name: Bug report
+description: Something is not working
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect instead?
+    validations:
+      required: true
+  - type: textarea
+    id: diag
+    attributes:
+      label: Output of PhantomMonitor.exe --diag
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: log
+    attributes:
+      label: Relevant lines from logs/phantommonitor.log
+      description: >
+        Please do NOT attach icon_layouts.json - it lists the name of every
+        item on your desktop.
+      render: text
