@@ -813,6 +813,33 @@ def suggest_rule(hwid, name, is_av, preferred, width, height):
             "outright and untick it when you want to use a screen behind it")
 
 
+def offset_in(rect, mon):
+    """Where a window sits WITHIN a display: (dx, dy, width, height)."""
+    return (rect[0] - mon.rect[0], rect[1] - mon.rect[1],
+            rect[2] - rect[0], rect[3] - rect[1])
+
+
+def offset_onto(rel, mon):
+    """Put an offset back onto a display, clamped so it stays reachable.
+
+    Relative rather than absolute because the same monitor moves around: drag
+    it to the other side in Display Settings, plug it into a different port, or
+    change which screen is primary, and every absolute coordinate on the
+    desktop shifts. None of that should lose where you had a window on it.
+
+    Clamped because a resolution change can leave the old offset hanging off
+    the edge - the position is worth keeping, but not at the cost of a window
+    you cannot reach.
+    """
+    dx, dy, width, height = rel
+    left, top, right, bottom = mon.work
+    width = max(80, min(width, right - left))
+    height = max(60, min(height, bottom - top))
+    x = min(max(left + dx, left), right - width)
+    y = min(max(top + dy, top), bottom - height)
+    return x, y, width, height
+
+
 def parse_block_spec(spec):
     """Parse a block rule into (hwid, size, smaller_than, interlaced_only).
 
@@ -1583,8 +1610,9 @@ class Guard:
     def remember_app_position(self, hwnd):
         """Note where a pinned app was left, so it opens there next time.
 
-        Stored in screen coordinates, like icon layouts, so the position stays
-        meaningful when the desktop origin moves.
+        Stored as an offset within the display rather than as a desktop
+        coordinate, so moving that monitor in the arrangement, plugging it into
+        another port or changing the primary does not lose the position.
         """
         mon = self.assigned_display(hwnd)
         if mon is None:
@@ -1599,7 +1627,7 @@ class Guard:
         if here is None or here.device != mon.device:
             return False  # only remember a position on its own display
         positions = dict(self.cfg.get("app_positions") or {})
-        positions[process_name(hwnd)] = list(rect)
+        positions[process_name(hwnd)] = {"rel": list(offset_in(rect, mon))}
         self.cfg["app_positions"] = positions
         save_config(self.cfg)
         log.info("remembered where %s sits on %s", process_name(hwnd), mon.name)
@@ -1623,14 +1651,18 @@ class Guard:
             return False  # already where it belongs
 
         saved = (self.cfg.get("app_positions") or {}).get(process_name(hwnd))
-        if saved and len(saved) == 4:
-            wanted = tuple(saved)
-            if monitor_of_rect(wanted, self.monitors, require_overlap=True) is mon:
-                x, y = wanted[0], wanted[1]
-                width, height = wanted[2] - wanted[0], wanted[3] - wanted[1]
+        if isinstance(saved, dict) and len(saved.get("rel") or ()) == 4:
+            x, y, width, height = offset_onto(saved["rel"], mon)
+        elif isinstance(saved, list) and len(saved) == 4:
+            # Written before positions were stored relative. Convert it if it
+            # still points at the right display, otherwise let it go.
+            if monitor_of_rect(tuple(saved), self.monitors,
+                               require_overlap=True) is mon:
+                x, y, width, height = offset_onto(
+                    offset_in(tuple(saved), mon), mon)
             else:
-                saved = None
-        if not saved:
+                x, y, width, height = centred_rect(mon, rect)
+        else:
             x, y, width, height = centred_rect(mon, rect)
 
         try:

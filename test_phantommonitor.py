@@ -579,6 +579,36 @@ check("a single-display game still holds the pointer",
       mg.cursor_lock_rect(ONE.rect, ALL, [], "somegame.exe",
                           [], [], True, True) == ONE.rect)
 
+# A pinned position is stored as an offset within its display, not as a desktop
+# coordinate. The same monitor moves around - dragged to the other side in
+# Display Settings, plugged into another port, made primary - and every absolute
+# coordinate shifts. None of that should lose where you had a window.
+PIN_MON = next(m for m in guard.monitors if not m.primary)
+win_rect = (PIN_MON.rect[0] + 100, PIN_MON.rect[1] + 50,
+            PIN_MON.rect[0] + 900, PIN_MON.rect[1] + 650)
+rel = mg.offset_in(win_rect, PIN_MON)
+check("an offset is measured from the display corner", rel[:2] == (100, 50))
+check("size is preserved in the offset", rel[2:] == (800, 600))
+check("putting it back where it was is exact",
+      mg.offset_onto(rel, PIN_MON)[:2] == (win_rect[0], win_rect[1]))
+
+# The same offset onto a display that has since moved should follow the display.
+class _Moved(object):
+    rect = (PIN_MON.rect[0] + 5000, PIN_MON.rect[1],
+            PIN_MON.rect[2] + 5000, PIN_MON.rect[3])
+    work = (rect[0], rect[1], rect[2], rect[3])
+check("a moved display carries the window with it",
+      mg.offset_onto(rel, _Moved())[0] == win_rect[0] + 5000)
+
+# A shrunken display must not leave the window off the edge.
+class _Small(object):
+    rect = (0, 0, 640, 480)
+    work = (0, 0, 640, 480)
+placed = mg.offset_onto((600, 400, 800, 600), _Small())
+check("a window is clamped onto a display that shrank",
+      placed[0] >= 0 and placed[1] >= 0
+      and placed[0] + placed[2] <= 640 and placed[1] + placed[3] <= 480)
+
 # The rule suggester. Sampling at the wrong moment - with a screen awake behind
 # the amp - is how someone ends up with a manual rule when an automatic one was
 # available, so that case has to say so rather than just recommending the
