@@ -1,7 +1,9 @@
 # Phantom Monitor
 
 Guards against phantom displays — the invisible monitors an AVR, soundbar or
-other HDMI device creates in Windows.
+other HDMI device creates in Windows. Nothing lands on them and the mouse is
+fenced out. Wake a real screen behind the amp and it can stand aside by itself,
+so that display works normally.
 
 ## The problem
 
@@ -38,6 +40,9 @@ want blocked. That is the whole setup.
 
 Displays are matched by EDID hardware id, not by index, so rules survive
 reboots, cable swaps and port changes.
+
+Whether it stands aside on its own when a screen wakes up behind the amp
+depends on which rule suits your hardware — see [Block rules](#block-rules).
 
 ## What it does
 
