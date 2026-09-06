@@ -2216,6 +2216,24 @@ class TrayApp:
                         log.debug("left %s alone: the app manages its own frame",
                                   shorten(title_of(hwnd), 30))
                         continue
+                    # Also judge by what it WAS, not only what it is now. An
+                    # app can drop out of full screen by itself when its
+                    # display sleeps, regaining a frame - and then this test
+                    # passes on a window that was full-screen a second ago.
+                    # Restoring it cannot put it back into full screen, only
+                    # into a window of that size, which is worse than leaving
+                    # it for the app to sort out on its own.
+                    ox0, oy0 = self.guard.workspace_offset()
+                    was = placement[4]
+                    was_rect = (was[0] + ox0, was[1] + oy0,
+                                was[2] + ox0, was[3] + oy0)
+                    was_host = monitor_of_rect(was_rect, self.guard.monitors,
+                                               require_overlap=True)
+                    if was_host is not None and covers_monitor(was_rect, was_host,
+                                                               fraction=0.98):
+                        log.debug("left %s alone: it filled a display before",
+                                  shorten(title_of(hwnd), 30))
+                        continue
                 except Exception:
                     pass
                 current = win32gui.GetWindowPlacement(hwnd)
