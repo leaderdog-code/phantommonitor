@@ -2182,6 +2182,30 @@ class TrayApp:
                 "tracking %d window position(s) [%s]", len(snapshot), reason)
         return len(snapshot)
 
+    def _ask_for_fullscreen(self, hwnd):
+        """Ask an app to go back into full-screen using its own shortcut.
+
+        Only for windows that filled a display before a change and lost it -
+        Remote Desktop drops out by itself when its monitor sleeps. Nothing
+        outside an app can put it back into full-screen, but the app will do
+        it if asked the way the user would.
+
+        On a thread: this waits, and the message loop must keep running.
+        """
+        time.sleep(1.5)     # let the display settle and the app catch up
+        try:
+            if not win32gui.IsWindow(hwnd) or not is_user_movable(hwnd):
+                return      # gone, or it sorted itself out already
+            toggle = FULLSCREEN_TOGGLES.get(win32gui.GetClassName(hwnd))
+            if not toggle:
+                return
+            label, mods, vk = toggle
+            send_key_combo(hwnd, mods, vk)
+            log.info("asked %r to go back to full-screen (%s)",
+                     shorten(title_of(hwnd), 40), label)
+        except Exception as exc:
+            log.debug("could not ask for full-screen: %s", exc)
+
     def _restore_windows(self, reason="display change"):
         """Put back only the windows the display change actually displaced.
 
@@ -2192,7 +2216,7 @@ class TrayApp:
         if not self.cfg.get("restore_windows", True) or not self.window_snapshot:
             return 0
         restored = skipped = 0
-        names = []
+        names, refullscreen = [], []
         for hwnd, placement in self.window_snapshot.items():
             try:
                 if not window_displaced(hwnd, placement, self.cfg):
@@ -2216,24 +2240,22 @@ class TrayApp:
                         log.debug("left %s alone: the app manages its own frame",
                                   shorten(title_of(hwnd), 30))
                         continue
-                    # Also judge by what it WAS, not only what it is now. An
-                    # app can drop out of full screen by itself when its
-                    # display sleeps, regaining a frame - and then this test
-                    # passes on a window that was full-screen a second ago.
-                    # Restoring it cannot put it back into full screen, only
-                    # into a window of that size, which is worse than leaving
-                    # it for the app to sort out on its own.
+                    # It may have been full-screen before and dropped out of
+                    # it by itself when its display slept. Put it back on the
+                    # right screen either way, and note that it wants asking
+                    # to go full-screen again afterwards - moving it there is
+                    # already better than Windows leaving it on the primary,
+                    # and the app can restore the rest.
                     ox0, oy0 = self.guard.workspace_offset()
                     was = placement[4]
                     was_rect = (was[0] + ox0, was[1] + oy0,
                                 was[2] + ox0, was[3] + oy0)
                     was_host = monitor_of_rect(was_rect, self.guard.monitors,
                                                require_overlap=True)
-                    if was_host is not None and covers_monitor(was_rect, was_host,
-                                                               fraction=0.98):
-                        log.debug("left %s alone: it filled a display before",
-                                  shorten(title_of(hwnd), 30))
-                        continue
+                    if (was_host is not None
+                            and covers_monitor(was_rect, was_host, fraction=0.98)
+                            and win32gui.GetClassName(hwnd) in FULLSCREEN_TOGGLES):
+                        refullscreen.append(hwnd)
                 except Exception:
                     pass
                 current = win32gui.GetWindowPlacement(hwnd)
@@ -2262,6 +2284,9 @@ class TrayApp:
                     pass
             except Exception:
                 continue
+        for hwnd in refullscreen:
+            threading.Thread(target=self._ask_for_fullscreen,
+                             args=(hwnd,), daemon=True).start()
         if restored or skipped:
             log.info("put back %d displaced window(s) [%s]%s%s", restored, reason,
                      "; %d skipped, their old spot is gone" % skipped if skipped else "",
