@@ -14,7 +14,7 @@
 ; asking for administrator rights at install time.
 
 #define AppName "Phantom Monitor"
-#define AppVersion "1.1.2"
+#define AppVersion "1.1.3"
 #define AppPublisher "Raymond Pierce"
 #define AppURL "https://github.com/leaderdog-code/phantommonitor"
 #define AppExe "PhantomMonitor.exe"
@@ -38,6 +38,16 @@ SolidCompression=yes
 WizardStyle=modern
 UninstallDisplayIcon={app}\{#AppExe}
 LicenseFile=..\LICENSE
+
+; The app runs from the tray with no ordinary window, so Inno's own detection
+; cannot shut it down: it found nothing to close, installed over a running copy
+; and failed on the locked exe. The [Code] section closes it instead.
+;
+; Deliberately no AppMutex. It is checked before any of that code runs, so it
+; only produced a "please close all instances" prompt for an app the installer
+; is perfectly capable of closing itself - and aborted outright when silent.
+CloseApplications=force
+RestartApplications=no
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
@@ -71,6 +81,62 @@ Type: files; Name: "{app}\icon_active.ico"
 Type: files; Name: "{app}\icon_paused.ico"
 
 [Code]
+{ Close any running copy before installing over it.
+
+  There can be more than one process: the tray app, plus the settings window,
+  which runs as a second PhantomMonitor.exe. Closing only the one Setup happens
+  to notice leaves the other holding the executable, and the install fails at
+  the very end - after the user has already been asked to retry twice.
+
+  Ask politely first so it can release the cursor clip and save its state, then
+  insist. }
+const
+  WM_CLOSE_MSG = 16;
+
+function CloseRunningCopies(): Boolean;
+var
+  Window: HWND;
+  ResultCode, Waited: Integer;
+begin
+  Window := FindWindowByClassName('PhantomMonitorWnd');
+  if Window <> 0 then
+    PostMessage(Window, WM_CLOSE_MSG, 0, 0);
+
+  Waited := 0;
+  while (Waited < 5000) and (FindWindowByClassName('PhantomMonitorWnd') <> 0) do
+  begin
+    Sleep(200);
+    Waited := Waited + 200;
+  end;
+
+  { Whatever is left - a settings window, or a copy that ignored the request. }
+  Exec(ExpandConstant('{sys}\taskkill.exe'), '/F /IM PhantomMonitor.exe /T',
+       '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+  Sleep(600);
+  Result := True;
+end;
+
+{ Both hooks on purpose. InitializeSetup runs before anything is checked or
+  copied, which is early enough that nothing ever sees a locked file.
+  PrepareToInstall catches a copy the user started while the wizard was open. }
+function InitializeSetup(): Boolean;
+begin
+  CloseRunningCopies();
+  Result := True;
+end;
+
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+begin
+  CloseRunningCopies();
+  Result := '';
+end;
+
+function InitializeUninstall(): Boolean;
+begin
+  CloseRunningCopies();
+  Result := True;
+end;
+
 { Settings and the saved desktop icon layout are the user's data, not ours.
   Deleting them silently loses a layout they may have spent time on; keeping
   them silently leaves files behind after an "uninstall". So ask, and default

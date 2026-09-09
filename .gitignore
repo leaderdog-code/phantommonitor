@@ -31,3 +31,6 @@ time_it.py
 
 # Release bodies are drafted locally and live on the release itself
 RELEASE_NOTES_*.md
+
+# Installer test logs
+install.log
