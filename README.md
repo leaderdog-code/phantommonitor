@@ -386,6 +386,9 @@ even when something has the pointer trapped.
   manually.
 - Moving windows belonging to elevated apps needs Phantom Monitor elevated too.
 - Two identical monitors share one hardware id. It warns when it sees that.
+- The primary display is never blocked, whatever the rules say. The taskbar
+  and the tray icon live there, so blocking it would fence you away from the
+  menu that would undo it.
 
 ## More
 

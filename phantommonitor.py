@@ -1410,6 +1410,7 @@ class Guard:
 
     def refresh_monitors(self):
         _preferred_cache.clear()   # EDIDs change with the topology
+        self.primary_warned = False
         self.monitors = enum_monitors()
         log.info("displays: %s", " | ".join(m.label() for m in self.monitors))
         # An EDID id identifies the MODEL, not the individual panel, so two
@@ -1426,6 +1427,21 @@ class Guard:
         specs = self.cfg.get("blocked_hwids", [])
         blocked = [m for m in self.monitors
                    if any(monitor_matches_block(m, s) for s in specs)]
+        # Never block the primary. The taskbar and this program's own tray icon
+        # live there, so blocking it evacuates the windows and fences the
+        # pointer away from the only menu that could undo it. A rule can end up
+        # aimed at the primary by accident - two identical monitors share one
+        # hardware id, and Windows can hand primary to a different screen after
+        # a topology change.
+        keep = [m for m in blocked if m.primary]
+        if keep:
+            if not self.primary_warned:
+                log.warning("%s is the primary display; not blocking it - the "
+                            "tray icon lives there", keep[0].name)
+                self.primary_warned = True
+            blocked = [m for m in blocked if not m.primary]
+        else:
+            self.primary_warned = False
         # Refuse to block everything - there would be nowhere to evacuate to.
         if blocked and len(blocked) >= len(self.monitors):
             log.warning("every display is blocked; standing down")

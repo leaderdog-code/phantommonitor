@@ -113,9 +113,14 @@ left, top, right, bottom = win32gui.GetWindowRect(hwnd)
 check("size preserved", (right - left, bottom - top) == (640, 480),
       "%dx%d" % (right - left, bottom - top))
 
-# 6 - guard must stand down rather than block every display
+# 6 - there must always be somewhere left to put a window. The primary is
+# exempt from blocking, so aiming a rule at every display leaves it usable
+# rather than standing the whole guard down.
 cfg["blocked_hwids"] = [m.hwid for m in guard.monitors]
-check("refuses to block everything", guard.blocked() == [])
+check("blocking every display still leaves the primary usable",
+      not any(m.primary for m in guard.blocked()))
+check("and blocks the rest",
+      len(guard.blocked()) == len(guard.monitors) - 1)
 cfg["blocked_hwids"] = [BLOCK_HWID]
 
 # 7 - paused guard must not move anything
@@ -603,6 +608,22 @@ check("launch count is capped",
       all(v <= 3 for v in mg.missing_launches(
           [{"app": "a.exe", "exe": "C:/a.exe", "rel": [0, 0, 1, 1]}] * 9,
           []).values()))
+
+# The primary must never be blocked. The taskbar and this program's own tray
+# icon live there, so blocking it evacuates the windows and fences the pointer
+# away from the only menu that could undo it. A rule can end up aimed at it by
+# accident: two identical monitors share a hardware id, and Windows can hand
+# primary to a different screen after a topology change.
+PRIMARY_MON = next(m for m in guard.monitors if m.primary)
+_saved_rules = guard.cfg.get("blocked_hwids")
+guard.cfg["blocked_hwids"] = [PRIMARY_MON.hwid]
+check("a rule aimed at the primary display is ignored",
+      PRIMARY_MON not in guard.blocked())
+guard.cfg["blocked_hwids"] = [m.hwid for m in guard.monitors]
+check("so there is always somewhere to evacuate to",
+      any(m.primary for m in guard.monitors)
+      and not any(m.primary for m in guard.blocked()))
+guard.cfg["blocked_hwids"] = _saved_rules
 
 # A saved arrangement is slots per application, deliberately interchangeable:
 # "two Brave windows go in these two rectangles", not "this window goes here".
