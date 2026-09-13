@@ -14,7 +14,7 @@
 ; asking for administrator rights at install time.
 
 #define AppName "Phantom Monitor"
-#define AppVersion "1.1.3"
+#define AppVersion "1.1.4"
 #define AppPublisher "Raymond Pierce"
 #define AppURL "https://github.com/leaderdog-code/phantommonitor"
 #define AppExe "PhantomMonitor.exe"

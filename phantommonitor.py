@@ -72,7 +72,7 @@ ARRANGEMENT_UNDO_PATH = os.path.join(DATA_DIR, "arrangement_undo.json")
 PROJECT_URL = "https://github.com/leaderdog-code/phantommonitor"
 RELEASES_URL = PROJECT_URL + "/releases"
 LATEST_API = "https://api.github.com/repos/leaderdog-code/phantommonitor/releases/latest"
-APP_VERSION = "1.1.3"   # keep in step with AppVersion in build/installer.iss
+APP_VERSION = "1.1.4"   # keep in step with AppVersion in build/installer.iss
 STARTUP_VBS = os.path.join(
     os.environ.get("APPDATA", ""),
     "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
