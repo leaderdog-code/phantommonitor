@@ -3646,6 +3646,45 @@ def print_diagnostics(cfg):
     print("can be detected without waiting out that timeout.")
 
 
+def running_copy_path():
+    """Where the PhantomMonitor that already holds the mutex is running from."""
+    try:
+        target = win32gui.FindWindow("PhantomMonitorWnd", None)
+        if not target:
+            return ""
+        _tid, pid = win32process.GetWindowThreadProcessId(target)
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION,
+                                      False, pid)
+        if not handle:
+            return ""
+        try:
+            size = wt.DWORD(1024)
+            buf = ctypes.create_unicode_buffer(1024)
+            if kernel32.QueryFullProcessImageNameW(handle, 0, buf,
+                                                   ctypes.byref(size)):
+                return buf.value
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception:
+        pass
+    return ""
+
+
+def warn_box(title, message):
+    """A message box, for the few things that must not go unnoticed.
+
+    Used sparingly: this program is meant to be invisible. But a copy exiting
+    because another is running is precisely the case where silence leaves
+    someone believing their settings are in effect when they are not.
+    """
+    try:
+        MB_ICONWARNING, MB_SETFOREGROUND, MB_TOPMOST = 0x30, 0x10000, 0x40000
+        user32.MessageBoxW(None, message, title,
+                           MB_ICONWARNING | MB_SETFOREGROUND | MB_TOPMOST)
+    except Exception:
+        pass
+
+
 def single_instance():
     handle = kernel32.CreateMutexW(None, False, "Global\\PhantomMonitor_SingleInstance")
     return handle and kernel32.GetLastError() != 183  # ERROR_ALREADY_EXISTS
@@ -3714,7 +3753,32 @@ def main():
         return 0
 
     if not single_instance():
-        log.warning("another PhantomMonitor is already running; exiting")
+        # Say WHICH copy is already running. Two copies from different folders
+        # - a portable one and an installed one, say - each have their own
+        # config, and whichever wins this race decides which rules apply. The
+        # loser used to exit with a bare line nobody sees, so the symptom was
+        # "my settings stopped working" with a tray icon sitting there happily.
+        other = running_copy_path()
+        mine = os.path.abspath(sys.executable if getattr(sys, "frozen", False)
+                               else __file__)
+        if other and os.path.normcase(other) != os.path.normcase(mine):
+            where = other
+            if os.path.basename(other).lower() in ("python.exe", "pythonw.exe"):
+                # Running from source, so the interpreter path is all Windows
+                # will tell us about it. Say so rather than pointing at Python.
+                where = "a copy running from source (" + other + ")"
+            log.warning("another PhantomMonitor is already running, from %s - "
+                        "it is using ITS OWN settings, not the ones beside "
+                        "this copy. Quit that one first, or remove its "
+                        "autostart entry.", where)
+            warn_box("Phantom Monitor is already running",
+                     "Another copy is running from:\n\n" + where + "\n\n"
+                     "It uses its own settings, not the ones beside this copy, "
+                     "so the rules you expect may not be the ones in effect."
+                     "\n\nQuit that copy first, or remove its start-up entry, "
+                     "then run this one again.")
+        else:
+            log.warning("another PhantomMonitor is already running; exiting")
         return 1
 
     log.info("%s starting (dpi awareness: %s)", APP_NAME, awareness)

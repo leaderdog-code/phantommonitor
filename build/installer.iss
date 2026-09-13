@@ -119,9 +119,35 @@ end;
 { Both hooks on purpose. InitializeSetup runs before anything is checked or
   copied, which is early enough that nothing ever sees a locked file.
   PrepareToInstall catches a copy the user started while the wizard was open. }
+{ A portable copy sets itself to start with Windows by dropping
+  PhantomMonitor.vbs into the Startup folder. Installing afterwards leaves both
+  that and Setup's own shortcut, so two copies race at every logon - each with
+  its own settings, and whichever wins decides which rules apply. The symptom
+  is "my settings stopped working" with a tray icon sitting there perfectly
+  happily, which is nearly impossible to diagnose.
+
+  Setup is plainly taking over, so offer to clear the other one out. }
+procedure RemovePortableAutostart();
+var
+  StrayVbs: String;
+begin
+  StrayVbs := ExpandConstant('{userstartup}\PhantomMonitor.vbs');
+  if FileExists(StrayVbs) then
+  begin
+    if MsgBox('Another copy of Phantom Monitor is set to start with Windows:'
+              + #13#10#13#10 + StrayVbs + #13#10#13#10
+              + 'That is a portable copy, with its own separate settings. If '
+              + 'both start, whichever wins decides which settings apply.'
+              + #13#10#13#10 + 'Remove that start-up entry?',
+              mbConfirmation, MB_YESNO) = IDYES then
+      DeleteFile(StrayVbs);
+  end;
+end;
+
 function InitializeSetup(): Boolean;
 begin
   CloseRunningCopies();
+  RemovePortableAutostart();
   Result := True;
 end;
 
