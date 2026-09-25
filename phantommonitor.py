@@ -1946,6 +1946,12 @@ class TrayApp:
         self.settings_child = None   # one settings window at a time
         self.window_snapshot = {}   # {hwnd: placement} - the last known good state
         self.windows_frozen = False  # stop snapshotting while a change is underway
+        # One remembered layout per display arrangement, exactly as desktop
+        # icons already work. A single live snapshot could not survive a
+        # monitor being switched off: it kept learning while the screen was
+        # away, so the collapsed layout became the remembered one and there was
+        # nothing left to come back to.
+        self.layouts_by_sig = {}
         self.last_signature = ""     # only restore when the layout actually changed
         self.verify_left = 0         # remaining late-nudge checks after a restore
         self.hotkeys = resolve_hotkeys(cfg)  # {0: rescue, N: monitor N}
@@ -2191,6 +2197,7 @@ class TrayApp:
         if not snapshot:
             return 0
         self.window_snapshot = snapshot
+        self.layouts_by_sig[topology_signature(self.guard.monitors)] = snapshot
         # Startup and an explicit save are worth stating: they are the two
         # moments someone checks whether this is actually tracking anything.
         # The rest happen constantly as windows move and would drown the log.
@@ -3554,7 +3561,17 @@ class TrayApp:
                         log.info("display event with no net layout change; "
                                  "checking for displaced windows")
                     else:
-                        log.info("layout changed; restoring")
+                        remembered = self.layouts_by_sig.get(sig)
+                        if remembered:
+                            # These displays have been in this arrangement
+                            # before, and this is where the windows were. Switch
+                            # a monitor off and on and you get that back, rather
+                            # than whatever Windows did while it was away.
+                            log.info("layout changed; restoring the one this "
+                                     "arrangement had before")
+                            self.window_snapshot = remembered
+                        else:
+                            log.info("layout changed; restoring")
                         self.last_signature = sig
                     # Windows and Explorer have finished shuffling by now.
                     self._restore_windows()
