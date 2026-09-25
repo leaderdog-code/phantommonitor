@@ -3159,6 +3159,14 @@ class TrayApp:
                 continue
             if only_hwid and mon.hwid != only_hwid:
                 continue
+            # Skip windows the app places itself - no caption, no resize frame.
+            # A full-screen RDP session or game covers the whole display
+            # including the taskbar, and recording that geometry only to
+            # re-impose it later is how it gets broken: applying clamps to the
+            # work area, so it comes back 30 pixels short and the taskbar
+            # reappears underneath the remote session's own one.
+            if not is_user_movable(hwnd):
+                continue
             slots.append({"app": app, "hwid": mon.hwid,
                           "rel": list(offset_in(rect, mon)),
                           "exe": exe_path(hwnd)})
@@ -3234,6 +3242,13 @@ class TrayApp:
             mon = self.guard.by_hwid(slot.get("hwid"))
             if mon is None:
                 continue            # that display is not here today
+            try:
+                if not is_user_movable(hwnd):
+                    log.debug("left %s alone: the app places itself",
+                              shorten(title_of(hwnd), 30))
+                    continue
+            except Exception:
+                pass
             try:
                 x, y, width, height = offset_onto(slot["rel"], mon)
                 current = win32gui.GetWindowPlacement(hwnd)
