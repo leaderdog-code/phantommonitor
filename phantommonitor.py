@@ -2198,20 +2198,39 @@ class TrayApp:
                 "tracking %d window position(s) [%s]", len(snapshot), reason)
         return len(snapshot)
 
-    def _ask_for_fullscreen(self, hwnd):
+    def _ask_for_fullscreen(self, hwnd, want_hwid=None):
         """Ask an app to go back into full-screen using its own shortcut.
 
-        Only for windows that filled a display before a change and lost it -
-        Remote Desktop drops out by itself when its monitor sleeps. Nothing
-        outside an app can put it back into full-screen, but the app will do
-        it if asked the way the user would.
+        Nothing outside an app can force it into full-screen, but it will do it
+        itself if asked the way the user would.
+
+        WANT_HWID is the display it should end up on, and this waits for the
+        window to actually be there before typing. Skipping that check once
+        sent the keystroke while the window was still on its old display, so
+        Remote Desktop went full-screen on a 4K panel and resized the session
+        to match - technically full-screen, unreadable in practice.
 
         On a thread: this waits, and the message loop must keep running.
         """
-        time.sleep(1.5)     # let the display settle and the app catch up
         try:
-            if not win32gui.IsWindow(hwnd) or not is_user_movable(hwnd):
-                return      # gone, or it sorted itself out already
+            deadline = time.monotonic() + 6
+            while True:
+                time.sleep(0.4)
+                if not win32gui.IsWindow(hwnd):
+                    return
+                if want_hwid is None:
+                    break
+                host = monitor_of_rect(win32gui.GetWindowRect(hwnd),
+                                       self.guard.monitors, require_overlap=True)
+                if host is not None and host.hwid == want_hwid:
+                    break
+                if time.monotonic() > deadline:
+                    log.info("not asking %r for full-screen: it has not "
+                             "settled on the right display",
+                             shorten(title_of(hwnd), 40))
+                    return
+            if not is_user_movable(hwnd):
+                return      # already full-screen; nothing to ask for
             toggle = FULLSCREEN_TOGGLES.get(win32gui.GetClassName(hwnd))
             if not toggle:
                 return
@@ -3262,6 +3281,7 @@ class TrayApp:
                 if not missing_launches(slots, windows):
                     break
         placed = 0
+        refullscreen = []
         # Remember where everything was first. Arranging gathers windows in
         # from other screens, so it can move something the user wanted left
         # alone - and without this there is no way back from that.
@@ -3312,8 +3332,17 @@ class TrayApp:
                                           win32con.SWP_NOZORDER
                                           | win32con.SWP_NOACTIVATE)
                 placed += 1
+                # Filling a display is not the same as being full-screen: the
+                # window still has a caption, so the local taskbar shows under
+                # a remote session's own one. Only the app can enter
+                # full-screen, and it is asked once the window has landed.
+                if slot.get("full") and is_user_movable(hwnd):
+                    refullscreen.append((hwnd, mon.hwid))
             except Exception:
                 continue
+        for hwnd, want in refullscreen:
+            threading.Thread(target=self._ask_for_fullscreen,
+                             args=(hwnd, want), daemon=True).start()
         if placed:
             self._write_arrangement(undo, ARRANGEMENT_UNDO_PATH)
         log.info("arranged %d window(s) from the %s", placed, reason)
