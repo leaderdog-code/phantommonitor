@@ -2252,9 +2252,38 @@ class TrayApp:
                     # covers anything, the test passed, and SetWindowPlacement
                     # then dropped a full-screen RDP session into a window it
                     # could not get out of by itself.
-                    if not is_user_movable(hwnd):
-                        log.debug("left %s alone: the app manages its own frame",
-                                  shorten(title_of(hwnd), 30))
+                    ox1, oy1 = self.guard.workspace_offset()
+                    was1 = placement[4]
+                    belongs = monitor_of_rect(
+                        (was1[0] + ox1, was1[1] + oy1,
+                         was1[2] + ox1, was1[3] + oy1),
+                        self.guard.monitors, require_overlap=True)
+                    now_rect = win32gui.GetWindowRect(hwnd)
+                    here = monitor_of_rect(now_rect, self.guard.monitors,
+                                           require_overlap=True)
+                    if (not is_user_movable(hwnd) and here is not None
+                            and covers_monitor(now_rect, here, fraction=0.98)):
+                        # Full-screen right now. SetWindowPlacement would drop
+                        # it out of full screen, so never use that on one: an
+                        # earlier attempt skipped these entirely instead, which
+                        # meant a session Windows had parked on the wrong
+                        # display simply stayed there.
+                        #
+                        # Already where it belongs - leave it be.
+                        if belongs is None or belongs.device == here.device:
+                            continue
+                        # Otherwise move it to that display, still covering it.
+                        win32gui.SetWindowPos(
+                            hwnd, 0, belongs.rect[0], belongs.rect[1],
+                            belongs.rect[2] - belongs.rect[0],
+                            belongs.rect[3] - belongs.rect[1],
+                            win32con.SWP_NOZORDER | win32con.SWP_NOACTIVATE)
+                        restored += 1
+                        try:
+                            names.append("%s (%s)" % (
+                                shorten(title_of(hwnd), 30), process_name(hwnd)))
+                        except Exception:
+                            pass
                         continue
                     # It may have been full-screen before and dropped out of
                     # it by itself when its display slept. Put it back on the
