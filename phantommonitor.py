@@ -2628,6 +2628,61 @@ class TrayApp:
         self._register_hotkeys()
 
     # -- menu
+    def _show_arrange_menu(self):
+        """Middle click: pick a layout, one click, nothing to slide through.
+
+        Applying a saved arrangement lives two submenus deep, and it is the
+        thing most often wanted - sit down, pick the layout for what you are
+        about to do. Menu items that small are fiddly to hit on the way past,
+        so it gets a button of its own.
+        """
+        self.guard.refresh_monitors()
+        self.actions = {}
+        menu = win32gui.CreatePopupMenu()
+        next_id = [1000]
+
+        def add(text, handler, enabled=True):
+            flags = win32con.MF_STRING
+            if not enabled:
+                flags |= win32con.MF_GRAYED
+            item_id = next_id[0]
+            next_id[0] += 1
+            win32gui.AppendMenu(menu, flags, item_id, text)
+            self.actions[item_id] = handler
+
+        modes = self._load_modes()
+        if not modes:
+            win32gui.AppendMenu(menu, win32con.MF_STRING | win32con.MF_GRAYED, 0,
+                                "No saved arrangements yet")
+            win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
+            add("Save this arrangement as...", lambda: self._save_arrangement())
+        else:
+            for name in sorted(modes):
+                add(name,
+                    (lambda n: lambda: self._apply_arrangement(mode=n))(name))
+            win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
+            # Opening programs is kept a deliberate choice, not something that
+            # happens because you picked a layout.
+            opens = win32gui.CreatePopupMenu()
+            for name in sorted(modes):
+                item_id = next_id[0]
+                next_id[0] += 1
+                win32gui.AppendMenu(opens, win32con.MF_STRING, item_id, name)
+                self.actions[item_id] = (
+                    lambda n: lambda: self._apply_arrangement(
+                        mode=n, launch=True))(name)
+            win32gui.AppendMenu(menu, win32con.MF_STRING | win32con.MF_POPUP,
+                                opens, "...and open what is missing")
+            add("Undo that arrangement", self._undo_arrangement,
+                enabled=bool(self._load_arrangement(ARRANGEMENT_UNDO_PATH)))
+
+        pos = win32gui.GetCursorPos()
+        win32gui.SetForegroundWindow(self.hwnd)
+        win32gui.TrackPopupMenu(menu, win32con.TPM_LEFTALIGN | win32con.TPM_RIGHTBUTTON,
+                                pos[0], pos[1], 0, self.hwnd, None)
+        win32gui.PostMessage(self.hwnd, win32con.WM_NULL, 0, 0)
+        win32gui.DestroyMenu(menu)
+
     def _show_menu(self):
         self.menu_target = pick_menu_target(self.last_focused, self.cfg)
         self.guard.refresh_monitors()
@@ -3301,6 +3356,11 @@ class TrayApp:
                     # A window procedure swallows exceptions, so a broken menu
                     # builder shows up as clicks doing nothing at all. Say so.
                     log.exception("could not build the tray menu")
+            elif lparam == win32con.WM_MBUTTONUP:
+                try:
+                    self._show_arrange_menu()
+                except Exception:
+                    log.exception("could not build the arrange menu")
             elif lparam == win32con.WM_LBUTTONDBLCLK:
                 self.guard.sweep("double-click")
             return 0

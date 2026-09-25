@@ -47,6 +47,9 @@ whole setup.
 below about rules and detection is only for people who *sometimes* put a real
 screen behind the amp and want to automate blocking.
 
+**Middle-click the icon** to pick a saved layout in one click, without going
+through the menu.
+
 Right-click the icon for everything else. That menu has a **Block <display>**
 tick for each screen, which is the quick way to let yourself use the screen
 behind the amp for a while without opening Settings.
