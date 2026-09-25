@@ -3128,10 +3128,21 @@ class TrayApp:
         if done.returncode != 0 or not name:
             log.info("naming cancelled; nothing saved")
             return
-        self._store_mode(name, slots, only_hwid)
+        self._store_mode(name, slots, only_hwid, ask=True)
 
-    def _store_mode(self, name, slots, only_hwid):
+    def _store_mode(self, name, slots, only_hwid, ask=False):
         modes = self._load_modes()
+        if ask and name in modes:
+            # Saving over an existing name silently was a quiet way to lose a
+            # layout you had spent time on, with nothing to say it had gone.
+            existing = len(modes[name])
+            if not confirm_box(
+                    "Replace this arrangement?",
+                    "An arrangement called %r already exists, with %d window%s "
+                    "in it.\n\nReplace it?" % (name, existing,
+                                                "" if existing == 1 else "s")):
+                log.info("not replacing the existing %r arrangement", name)
+                return
         if only_hwid and name in modes:
             # Saving one screen into an existing mode replaces only that
             # screen's slots, so building a mode up display by display works.
@@ -3159,17 +3170,20 @@ class TrayApp:
                 continue
             if only_hwid and mon.hwid != only_hwid:
                 continue
-            # Skip windows the app places itself - no caption, no resize frame.
-            # A full-screen RDP session or game covers the whole display
-            # including the taskbar, and recording that geometry only to
-            # re-impose it later is how it gets broken: applying clamps to the
-            # work area, so it comes back 30 pixels short and the taskbar
-            # reappears underneath the remote session's own one.
-            if not is_user_movable(hwnd):
-                continue
-            slots.append({"app": app, "hwid": mon.hwid,
-                          "rel": list(offset_in(rect, mon)),
-                          "exe": exe_path(hwnd)})
+            # A window the app places itself - no caption, no resize frame -
+            # that covers its whole display is full-screen. Record it as such
+            # rather than as a rectangle: applying clamps to the work area, so
+            # a remembered 1440-tall RDP session would come back 1410 tall,
+            # stop covering the taskbar, and leave the local taskbar showing
+            # under the remote session's own one.
+            full = (not is_user_movable(hwnd)
+                    and covers_monitor(rect, mon, fraction=0.98))
+            slot = {"app": app, "hwid": mon.hwid,
+                    "rel": list(offset_in(rect, mon)),
+                    "exe": exe_path(hwnd)}
+            if full:
+                slot["full"] = True
+            slots.append(slot)
         return slots
 
     def _apply_arrangement(self, only_hwid=None, path=None,
@@ -3242,15 +3256,17 @@ class TrayApp:
             mon = self.guard.by_hwid(slot.get("hwid"))
             if mon is None:
                 continue            # that display is not here today
+
             try:
-                if not is_user_movable(hwnd):
-                    log.debug("left %s alone: the app places itself",
-                              shorten(title_of(hwnd), 30))
-                    continue
-            except Exception:
-                pass
-            try:
-                x, y, width, height = offset_onto(slot["rel"], mon)
+                if slot.get("full"):
+                    # The whole display, taskbar included - that is what
+                    # full-screen means, and the work area is 30 pixels short
+                    # of it.
+                    x, y = mon.rect[0], mon.rect[1]
+                    width = mon.rect[2] - mon.rect[0]
+                    height = mon.rect[3] - mon.rect[1]
+                else:
+                    x, y, width, height = offset_onto(slot["rel"], mon)
                 current = win32gui.GetWindowPlacement(hwnd)
                 if current[1] == win32con.SW_SHOWMINIMIZED:
                     # Leave it minimized and correct where it will reappear.
@@ -3743,6 +3759,19 @@ def running_copy_path():
     except Exception:
         pass
     return ""
+
+
+def confirm_box(title, message):
+    """Yes/No. Returns True for yes."""
+    try:
+        MB_YESNO, MB_ICONQUESTION = 0x4, 0x20
+        MB_SETFOREGROUND, MB_TOPMOST = 0x10000, 0x40000
+        IDYES = 6
+        return user32.MessageBoxW(None, message, title,
+                                  MB_YESNO | MB_ICONQUESTION
+                                  | MB_SETFOREGROUND | MB_TOPMOST) == IDYES
+    except Exception:
+        return True
 
 
 def warn_box(title, message):

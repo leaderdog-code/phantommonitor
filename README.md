@@ -140,10 +140,11 @@ window handles do not, and it does not break when a page title changes.
   moved back where they were. It records only the ones it is about to touch,
   just before touching them, so anything it collected from another screen goes
   home. Available until you arrange again or restart the app.
-- **Full-screen windows are never touched.** A game or a full-screen Remote
-  Desktop session covers the whole display including the taskbar, and it
-  places itself. Arrangements clamp to the work area, so re-imposing one on
-  a full-screen window would bring it back short and uncover the taskbar.
+- **Full-screen windows are remembered as full-screen.** A game or a
+  full-screen Remote Desktop session covers the whole display, taskbar
+  included, so it is recorded as "full-screen on that display" rather than as
+  a rectangle — put back any other way it lands 30 pixels short and the
+  taskbar reappears underneath it.
 - Extra windows beyond the slots are left where they are
 - Missing apps just leave their slot empty
 - Positions are relative to each display, so moving a monitor does not spoil it
