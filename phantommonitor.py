@@ -3233,7 +3233,6 @@ class TrayApp:
                 if not missing_launches(slots, windows):
                     break
         placed = 0
-        refullscreen = []
         # Remember where everything was first. Arranging gathers windows in
         # from other screens, so it can move something the user wanted left
         # alone - and without this there is no way back from that.
@@ -3284,18 +3283,8 @@ class TrayApp:
                                           win32con.SWP_NOZORDER
                                           | win32con.SWP_NOACTIVATE)
                 placed += 1
-                # Filling the display is not the same as being full-screen.
-                # A Remote Desktop session put back at the display's bounds is
-                # still a window with a caption, showing the local taskbar
-                # under the remote one. Only the app can enter full-screen, so
-                # ask it the way the user would.
-                if slot.get("full") and is_user_movable(hwnd):
-                    refullscreen.append(hwnd)
             except Exception:
                 continue
-        for hwnd in refullscreen:
-            threading.Thread(target=self._ask_for_fullscreen,
-                             args=(hwnd,), daemon=True).start()
         if placed:
             self._write_arrangement(undo, ARRANGEMENT_UNDO_PATH)
         log.info("arranged %d window(s) from the %s", placed, reason)
