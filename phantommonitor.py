@@ -2696,7 +2696,10 @@ class TrayApp:
         taken and is not in it - which is the difference between rescuing
         something and dragging out something that was put away on purpose.
 
-        Explicit rescue only. Never automatic.
+        Runs when a display change is put right, and on an explicit rescue.
+        Deliberately not on the periodic sweep: the snapshot is live then, so a
+        window hidden a moment ago would still be in it, and tucking something
+        away would keep undoing itself.
         """
         shown = []
         for hwnd in list(self.window_snapshot):
@@ -3613,6 +3616,12 @@ class TrayApp:
                             log.info("layout changed; restoring")
                         self.last_signature = sig
                     # Windows and Explorer have finished shuffling by now.
+                    #
+                    # Un-hide first. An app can react to losing its display by
+                    # hiding its window rather than moving it, and a hidden
+                    # window cannot be restored - so without this, putting the
+                    # layout back silently leaves one of them missing.
+                    self._unhide_vanished()
                     self._restore_windows()
                     self._find_icon_listview()  # it may have been recreated
                     self._restore_icons()
