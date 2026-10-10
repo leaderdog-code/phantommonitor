@@ -2672,11 +2672,50 @@ class TrayApp:
             user32.ClipCursor(None)
             self.cursor_clipped = False
             self.cursor_locked_app = ""
+            self._unhide_vanished()
             self.guard.sweep("hotkey", include_offscreen=True)
             self._apply_cursor_clip()
         elif 1 <= action <= 9:
             self.guard.move_active_to(
                 action, pick_menu_target(self.last_focused, self.cfg), "hotkey")
+
+    def _unhide_vanished(self):
+        """Show windows that were on screen a moment ago and now are not.
+
+        A window can go missing without going off-screen: an app reacting
+        badly to its display disappearing may hide its window instead of
+        moving it. It is then running, sensibly positioned, invisible, and
+        absent from the taskbar - so neither a sweep (which looks for windows
+        on no display) nor an arrangement (which only places visible ones)
+        finds it, and there is nothing to click.
+
+        The snapshot is the evidence for "was on screen": it only ever holds
+        windows that were visible and manageable when it was taken. So a
+        window in it that is now hidden vanished on us. An app deliberately
+        tucked into the notification area was hidden before the snapshot was
+        taken and is not in it - which is the difference between rescuing
+        something and dragging out something that was put away on purpose.
+
+        Explicit rescue only. Never automatic.
+        """
+        shown = []
+        for hwnd in list(self.window_snapshot):
+            try:
+                if not win32gui.IsWindow(hwnd) or win32gui.IsWindowVisible(hwnd):
+                    continue
+                left, top, right, bottom = win32gui.GetWindowRect(hwnd)
+                if right - left < 200 or bottom - top < 100:
+                    continue        # too small to be the window someone lost
+                win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
+                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                shown.append("%s (%s)" % (shorten(title_of(hwnd), 30),
+                                          process_name(hwnd)))
+            except Exception:
+                continue
+        if shown:
+            log.info("brought back %d window(s) that had gone invisible: %s",
+                     len(shown), ", ".join(shown))
+        return len(shown)
 
     def _rebuild_hotkeys(self):
         self._unregister_hotkeys()

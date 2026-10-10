@@ -374,7 +374,7 @@ would strand the pointer. Overlays that span several displays, like the
 
 | Key | Action |
 |---|---|
-| `Ctrl+Alt+Shift+0` | Rescue: free the pointer and pull back stranded windows |
+| `Ctrl+Alt+Shift+0` | Rescue: free the pointer, pull back stranded windows, and show any that have gone invisible |
 | `Ctrl+Alt+Shift+1-9` | Move the active window to that slot |
 
 Slots are assigned by you in Settings and pinned to a hardware id. They are not
