@@ -3570,6 +3570,7 @@ class TrayApp:
                 if time.monotonic() >= self.icons_quiet_until:
                     self._snapshot_icons("icons moved")
             elif wparam == TIMER_VERIFY:
+                self._unhide_vanished()
                 if self._restore_windows("late nudge"):
                     self._snapshot_windows("after late fix")
                 self.verify_left -= 1
@@ -3621,8 +3622,13 @@ class TrayApp:
                     # hiding its window rather than moving it, and a hidden
                     # window cannot be restored - so without this, putting the
                     # layout back silently leaves one of them missing.
+                    # Before AND after. A Gecko window - Firefox, Pale Moon -
+                    # has been seen going invisible as a result of being moved
+                    # during a display change, so checking only beforehand
+                    # misses exactly the ones the restore itself provokes.
                     self._unhide_vanished()
                     self._restore_windows()
+                    self._unhide_vanished()
                     self._find_icon_listview()  # it may have been recreated
                     self._restore_icons()
                     # Our own restore moves icons, which fires the same
