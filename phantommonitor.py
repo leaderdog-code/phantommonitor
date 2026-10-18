@@ -1952,6 +1952,7 @@ class TrayApp:
         # away, so the collapsed layout became the remembered one and there was
         # nothing left to come back to.
         self.layouts_by_sig = {}
+        self.known_hwids = set()    # displays present at the last settle
         self.last_signature = ""     # only restore when the layout actually changed
         self.verify_left = 0         # remaining late-nudge checks after a restore
         self.hotkeys = resolve_hotkeys(cfg)  # {0: rescue, N: monitor N}
@@ -1974,6 +1975,7 @@ class TrayApp:
         self._apply_cursor_clip()
         self._find_icon_listview()
         self.last_signature = topology_signature(self.guard.monitors)
+        self.known_hwids = set(m.hwid for m in self.guard.monitors)
         self._snapshot_icons("startup")
         self._snapshot_windows("startup")
         self._start_icon_watch()
@@ -2678,6 +2680,50 @@ class TrayApp:
         elif 1 <= action <= 9:
             self.guard.move_active_to(
                 action, pick_menu_target(self.last_focused, self.cfg), "hotkey")
+
+    def _rehome_pinned(self, returned):
+        """Send pinned apps back to a display that has just reappeared.
+
+        A pin places a window when it opens, which is no help if its display
+        was not there at the time. A DisplayPort monitor vanishes completely
+        while it is switched off, so anything starting with Windows before the
+        screen wakes - a browser opened by a startup shortcut, say - opens on
+        whatever display does exist and stays there.
+
+        Scoped deliberately to displays that have just come back. Doing it on
+        every display event would drag a pinned window off a screen the user
+        had deliberately moved it to.
+        """
+        if not returned:
+            return 0
+        pins = self.cfg.get("app_displays") or {}
+        wanted = dict((app, hwid) for app, hwid in pins.items()
+                      if hwid in returned)
+        if not wanted:
+            return 0
+        moved = 0
+        hwnds = []
+        win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
+        for hwnd in hwnds:
+            try:
+                if not is_manageable(hwnd, self.cfg):
+                    continue
+                app = process_name(hwnd)
+                if app not in wanted:
+                    continue
+                home = self.guard.by_hwid(wanted[app])
+                here = monitor_of_rect(win32gui.GetWindowRect(hwnd),
+                                       self.guard.monitors, require_overlap=True)
+                if home is None or (here is not None
+                                    and here.device == home.device):
+                    continue
+                if self.guard.place_assigned(hwnd):
+                    moved += 1
+                    log.info("sent %s back to %s, which has just come back",
+                             app, home.name)
+            except Exception:
+                continue
+        return moved
 
     def _unhide_vanished(self):
         """Show windows that were on screen a moment ago and now are not.
@@ -3626,9 +3672,17 @@ class TrayApp:
                     # has been seen going invisible as a result of being moved
                     # during a display change, so checking only beforehand
                     # misses exactly the ones the restore itself provokes.
+                    present = set(m.hwid for m in self.guard.monitors)
+                    returned = present - self.known_hwids
+                    self.known_hwids = present
+                    # Before AND after. A Gecko window - Firefox, Pale Moon -
+                    # has been seen going invisible as a result of being moved
+                    # during a display change, so checking only beforehand
+                    # misses exactly the ones the restore itself provokes.
                     self._unhide_vanished()
                     self._restore_windows()
                     self._unhide_vanished()
+                    self._rehome_pinned(returned)
                     self._find_icon_listview()  # it may have been recreated
                     self._restore_icons()
                     # Our own restore moves icons, which fires the same
