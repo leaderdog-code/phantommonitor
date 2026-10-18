@@ -2681,6 +2681,43 @@ class TrayApp:
             self.guard.move_active_to(
                 action, pick_menu_target(self.last_focused, self.cfg), "hotkey")
 
+    def _rehome_all_pinned(self):
+        """Send every pinned app to its display, now.
+
+        The pin acts when a window opens and when its display comes back.
+        Neither helps for a window already sitting on the wrong screen - after
+        pinning something that is already open, say, or after the automatic
+        pass missed one - and there was no way to ask for it by hand.
+        """
+        pins = self.cfg.get("app_displays") or {}
+        if not pins:
+            log.info("no apps are pinned to a display")
+            return 0
+        moved = 0
+        hwnds = []
+        win32gui.EnumWindows(lambda h, acc: acc.append(h), hwnds)
+        for hwnd in hwnds:
+            try:
+                if not is_manageable(hwnd, self.cfg):
+                    continue
+                app = process_name(hwnd)
+                if app not in pins:
+                    continue
+                home = self.guard.by_hwid(pins[app])
+                here = monitor_of_rect(win32gui.GetWindowRect(hwnd),
+                                       self.guard.monitors, require_overlap=True)
+                if home is None or (here is not None
+                                    and here.device == home.device):
+                    continue
+                if self.guard.place_assigned(hwnd):
+                    moved += 1
+                    log.info("sent %s to %s", app, home.name)
+            except Exception:
+                continue
+        if not moved:
+            log.info("every pinned app is already on its display")
+        return moved
+
     def _rehome_pinned(self, returned):
         """Send pinned apps back to a display that has just reappeared.
 
@@ -2930,6 +2967,8 @@ class TrayApp:
                 add("Do not pin it anywhere", self._make_pin_action(None),
                     into=pin_menu)
             add_sub("Always open %s on" % (pinned_app or "this app"), pin_menu)
+        if self.cfg.get("app_displays"):
+            add("Send pinned apps to their displays", self._rehome_all_pinned)
 
         move_menu = win32gui.CreatePopupMenu()
         specs = self.cfg.get("hotkeys") or {}
