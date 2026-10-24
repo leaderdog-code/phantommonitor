@@ -1354,6 +1354,18 @@ def pick_menu_target(last_focused, cfg, current=None):
     return 0
 
 
+def is_app_fullscreen(hwnd, rect, mon):
+    """Is this window full-screen on MON, as an arrangement slot means it?
+
+    One definition, used when a slot is saved (`_gather_slots`) and when the
+    undo is recorded (`_apply_arrangement`). They must agree: a slot marked
+    `full` is applied at the display's full bounds, while a plain one goes
+    through the work-area clamp and lands short of the taskbar, so two copies
+    drifting apart would silently demote a window on the way back.
+    """
+    return not is_user_movable(hwnd) and covers_monitor(rect, mon, fraction=0.98)
+
+
 def is_user_movable(hwnd):
     """A window with no caption and no resize frame cannot be dragged or resized."""
     try:
@@ -1943,6 +1955,7 @@ class TrayApp:
         self.icons_quiet_until = 0.0  # do not snapshot while a change is settling
         self.icon_listview = 0
         self.icon_watch_stop = None
+        self.icon_watch_thread = None
         self.settings_child = None   # one settings window at a time
         self.window_snapshot = {}   # {hwnd: placement} - the last known good state
         self.windows_frozen = False  # stop snapshotting while a change is underway
@@ -2064,11 +2077,21 @@ class TrayApp:
         """
         if not self.cfg.get("restore_icons", True):
             return
+        # Judge "already watching" by the THREAD, not by the event handle.
+        # _icon_watch_loop returns on its own if the registry watch is
+        # unavailable or it hits an error, leaving the handle set - checking
+        # that alone would refuse to ever restart a watcher that had died.
+        if self.icon_watch_thread and self.icon_watch_thread.is_alive():
+            return
+        if self.icon_watch_stop:
+            kernel32.CloseHandle(self.icon_watch_stop)
         self.icon_watch_stop = kernel32.CreateEventW(None, True, False, None)
-        thread = threading.Thread(target=self._icon_watch_loop, daemon=True)
-        thread.start()
+        self.icon_watch_thread = threading.Thread(target=self._icon_watch_loop,
+                                                  daemon=True)
+        self.icon_watch_thread.start()
 
     def _icon_watch_loop(self):
+        changed = None
         while True:
             try:
                 key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, ICON_BAG_KEY)
@@ -2099,6 +2122,12 @@ class TrayApp:
                     key.Close()
                 except Exception:
                     pass
+                # The event is created fresh on every pass round the loop, so
+                # not closing it leaked one handle per Explorer notification -
+                # for the life of the process.
+                if changed:
+                    kernel32.CloseHandle(changed)
+                    changed = None
 
     def _find_icon_listview(self):
         self.icon_listview = desktop_icons.desktop_listview()
@@ -2291,7 +2320,12 @@ class TrayApp:
         names, refullscreen = [], []
         for hwnd, placement in self.window_snapshot.items():
             try:
-                if not window_displaced(hwnd, placement, self.cfg):
+                # Pass the monitors: without them a maximized window that
+                # Windows shunted to another display keeps its old
+                # rcNormalPosition and reads as untouched (:1320-1336), which
+                # is the case a user notices most.
+                if not window_displaced(hwnd, placement, self.cfg,
+                                        self.guard.monitors):
                     continue  # untouched by the change - do not interfere
                 # Leave full-screen windows alone. SetWindowPlacement on one
                 # drops it out of full screen, so "restoring" a full-screen RDP
@@ -2317,8 +2351,8 @@ class TrayApp:
                     now_rect = win32gui.GetWindowRect(hwnd)
                     here = monitor_of_rect(now_rect, self.guard.monitors,
                                            require_overlap=True)
-                    if (not is_user_movable(hwnd) and here is not None
-                            and covers_monitor(now_rect, here, fraction=0.98)):
+                    if (here is not None
+                            and is_app_fullscreen(hwnd, now_rect, here)):
                         # Full-screen right now. SetWindowPlacement would drop
                         # it out of full screen, so never use that on one: an
                         # earlier attempt skipped these entirely instead, which
@@ -2502,9 +2536,14 @@ class TrayApp:
 
     # -- cursor fence
     def _release_cursor_clip(self):
-        if self.cursor_clipped:
+        # cursor_locked_app as well as cursor_clipped: the app-lock branch
+        # (:2543) deliberately leaves cursor_clipped False, so checking only
+        # that left the pointer held inside a game after the fence, or the
+        # guard itself, was switched off. "Off" has to mean off.
+        if self.cursor_clipped or self.cursor_locked_app:
             user32.ClipCursor(None)
             self.cursor_clipped = False
+            self.cursor_locked_app = ""
 
     def _apply_cursor_clip(self):
         """Fence the pointer out of blocked displays.
@@ -3201,6 +3240,11 @@ class TrayApp:
         self._rebuild_hotkeys()
         self._refresh_key_hook()
         self._update_tray_icon()
+        # Settings can switch icon restore on, and the watcher returns early
+        # at startup when it was off (:2078). Without this, turning it on in
+        # the Settings window left the option looking on and doing nothing
+        # until the next restart - the same gap the tray toggle had.
+        self._start_icon_watch()
         log.info("settings reloaded")
         self.guard.sweep("reload")
 
@@ -3228,6 +3272,12 @@ class TrayApp:
         log.info("desktop icon restore %s",
                  "on" if self.cfg["restore_icons"] else "off")
         if self.cfg["restore_icons"]:
+            # Arm the watcher too. It returns early at startup when the option
+            # is off (:2078), so without this, switching it on left saves
+            # depending on a ListView LOCATIONCHANGE that Explorer does not
+            # actually raise for a move (:214-217) - the option looked on and
+            # did nothing until the next restart.
+            self._start_icon_watch()
             self._snapshot_icons("just enabled")
 
     def _make_pin_action(self, hwid):
@@ -3393,8 +3443,7 @@ class TrayApp:
             # a remembered 1440-tall RDP session would come back 1410 tall,
             # stop covering the taskbar, and leave the local taskbar showing
             # under the remote session's own one.
-            full = (not is_user_movable(hwnd)
-                    and covers_monitor(rect, mon, fraction=0.98))
+            full = is_app_fullscreen(hwnd, rect, mon)
             slot = {"app": app, "hwid": mon.hwid,
                     "rel": list(offset_in(rect, mon)),
                     "exe": exe_path(hwnd)}
@@ -3466,8 +3515,13 @@ class TrayApp:
                                       require_overlap=True)
                 if was is None:
                     continue
-                undo.append({"app": process_name(hwnd), "hwid": was.hwid,
-                             "rel": list(offset_in(rect, was))})
+                # Same full-screen test the save path uses, or the undo
+                # quietly demotes a full-screen window to a windowed one.
+                entry = {"app": process_name(hwnd), "hwid": was.hwid,
+                         "rel": list(offset_in(rect, was))}
+                if is_app_fullscreen(hwnd, rect, was):
+                    entry["full"] = True
+                undo.append(entry)
             except Exception:
                 continue
         for hwnd, slot in fill_slots(slots, windows):

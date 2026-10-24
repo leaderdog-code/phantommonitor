@@ -527,17 +527,25 @@ def run(config_path, monitors, absent=()):
     opts = ttk.LabelFrame(body, text="Behaviour")
     opts.grid(row=3, column=0, sticky="ew", **pad)
 
+    # Each toggle carries its OWN default, which must match DEFAULT_CONFIG in
+    # phantommonitor.py. `load` reads config.json raw - it cannot merge the
+    # defaults, because importing the main module from this child process
+    # would re-execute it. Defaulting them all to True was wrong for
+    # block_cursor (False in DEFAULT_CONFIG:99): a config missing the key, or
+    # an unreadable one - `load` returns {} - showed every box ticked, and
+    # pressing Save then switched the pointer fence on for a user who had
+    # never asked for it.
     toggles = [
-        ("enabled", "Keep windows off blocked displays  (master switch)"),
-        ("block_cursor", "Keep the mouse pointer off blocked displays"),
-        ("restore_windows", "Put windows back after a display change"),
-        ("restore_icons", "Put desktop icons back after a display change"),
-        ("leave_fullscreen", "Ask full-screen apps to leave full-screen before moving them"),
-        ("intercept_hotkeys", "Catch hotkeys from apps that swallow them (Remote Desktop)"),
+        ("enabled", "Keep windows off blocked displays  (master switch)", True),
+        ("block_cursor", "Keep the mouse pointer off blocked displays", False),
+        ("restore_windows", "Put windows back after a display change", True),
+        ("restore_icons", "Put desktop icons back after a display change", True),
+        ("leave_fullscreen", "Ask full-screen apps to leave full-screen before moving them", True),
+        ("intercept_hotkeys", "Catch hotkeys from apps that swallow them (Remote Desktop)", True),
     ]
     toggle_vars = {}
-    for row, (key, text) in enumerate(toggles):
-        var = tk.BooleanVar(value=bool(cfg.get(key, True)))
+    for row, (key, text, default) in enumerate(toggles):
+        var = tk.BooleanVar(value=bool(cfg.get(key, default)))
         toggle_vars[key] = var
         ttk.Checkbutton(opts, text=text, variable=var).grid(
             row=row, column=0, sticky="w", padx=10, pady=2)

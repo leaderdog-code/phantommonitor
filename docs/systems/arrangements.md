@@ -24,8 +24,10 @@ windows go in these two rectangles" (`fill_slots` 848-872). Handles die at reboo
       {"app": "brave.exe", "hwid": "ABC1234", "rel": [x, y, w, h], "exe": "C:\\...\\brave.exe"},
       {"app": "mstsc.exe", "hwid": "ABC1234", "rel": [0,0,2560,1440], "exe": "...", "full": true}]}}}
   ```
-  `exe` and `full` are optional. The undo file is the **legacy** shape — bare `{"slots": [...]}`,
-  no `exe`, no `full` (`_write_arrangement` 3264-3265).
+  `exe` and `full` are optional. The undo file is the bare `{"slots": [...]}` shape with no `exe`
+  (`_write_arrangement` 3264-3265) — it never launches anything, it only puts back what was already
+  open. It **does** carry `full`, recorded through the shared `is_app_fullscreen` helper, because
+  without it undoing a full-screen window restored it windowed through the work-area clamp.
 - **Legacy migration** — `_load_modes` 3238-3249: a file with a top-level `slots` key and no `modes`
   is read as one mode named `"Saved layout"` (3247) and rewritten in the `modes` shape next time
   anything is saved. The same migration exists again in settings_window.py:210-220 — two copies.

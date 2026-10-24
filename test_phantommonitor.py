@@ -1,6 +1,9 @@
 """End-to-end check: park real windows on the Denon, confirm the guard evacuates them."""
-import sys, time, tkinter as tk
-sys.path.insert(0, r"C:\Users\Ray\tools\phantommonitor")
+import os, sys, time, tkinter as tk
+# Next to this file, wherever it was cloned to. A hard-coded path meant the
+# suite only ran on the author's machine, while docs/development.md tells
+# contributors to run exactly this file.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import win32con, win32gui
 import phantommonitor as mg
@@ -444,7 +447,6 @@ check("a tag with rubbish in it does not crash",
 
 # 23 - an app pinned to a display is never evacuated from it, which is what
 #      makes a dedicated chat or dashboard screen possible at all.
-import os
 me = os.path.basename(sys.executable).lower()
 cfg["blocked_hwids"] = [BLOCK_HWID]
 cfg["app_displays"] = {me: denon.hwid}
