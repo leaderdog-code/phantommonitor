@@ -97,13 +97,13 @@ DEFAULT_CONFIG = {
     # Fence the mouse pointer out of blocked displays too. Only possible when
     # the blocked display sits outside the bounding box of the others.
     "block_cursor": False,
-    # Put desktop icons back after a display change scrambles them.
     # Put windows back where they were after a display change moves them.
     # Restores only the windows a display change actually displaced, by
     # comparing against a snapshot frozen the moment the change began. Windows
     # the change did not touch are left strictly alone.
     "restore_windows": True,
     "window_save_debounce_ms": 2000,
+    # Put desktop icons back after a display change scrambles them.
     "restore_icons": True,
     # Saves are triggered by actually moving an icon, not by a timer. This is
     # how long to wait after the last move before writing, so that dragging
@@ -135,25 +135,30 @@ DEFAULT_CONFIG = {
     # notepad.exe, which every Windows install has. A name on PATH or a full
     # path both work, and environment variables are expanded.
     "editor": "",
-    # Where "Support this project" points. Empty hides the menu item entirely -
-    # nobody should have a donation link nagging them from a tray menu they did
-    # not ask for one in.
-    # Send named apps to a display and remember where they sat there, e.g.
-    # {"discord.exe": "GSM7814"}. Those apps open on that display and are never
-    # evacuated from it, even when it is blocked - which is what makes a
-    # dedicated chat or dashboard screen possible.
     # Hardware ids you have marked yourself as an amp, switch or extractor
-    # rather than a display. Only affects what is shown - nothing is blocked on
-    # this basis. Worth reporting so the built-in list catches up.
+    # rather than a display, and ids wrongly guessed as one. Only affects what
+    # is shown - nothing is blocked on this basis. not_av_devices wins over
+    # both av_devices and the built-in vendor list. Worth reporting either way,
+    # so the built-in list catches up.
     "av_devices": [],
     "not_av_devices": [],
     "cursor_lock_apps": [],
     "cursor_lock_fullscreen": True,
     "cursor_never_lock": ["mstsc.exe", "explorer.exe",
                           "screenclippinghost.exe", "snippingtool.exe"],
+    # Zoom for the settings window only, 1.0 to 3.0. Windows' own DPI scaling
+    # is honoured on top of it.
     "settings_zoom": 1.0,
+    # Send named apps to a display and remember where they sat there, e.g.
+    # {"discord.exe": "ABC1234"}. Those apps open on that display and are
+    # never evacuated from it, even when it is blocked - which is what makes
+    # a dedicated chat or dashboard screen possible. app_positions is where
+    # each one last sat, relative to that display.
     "app_displays": {},
     "app_positions": {},
+    # Where "Support this project" points. Empty hides the menu item entirely
+    # - nobody should have a donation link nagging them from a tray menu they
+    # did not ask for one in.
     "support_url": "",
     # Off by default. Checking asks GitHub for the latest release, which means
     # contacting a server, and a tray utility should not do that unasked.
@@ -452,8 +457,13 @@ def display_settings_numbers():
     Deliberately not the digit in \\.\DISPLAYn. Those get reassigned on a
     hot-plug and then no longer agree with the numbers on the "Rearrange your
     displays" page - plug a screen in and \\.\DISPLAY2 can become the third
-    monitor. Settings numbers the active display-config paths in order, so that
-    is what a hotkey called "move to monitor 2" has to mean.
+    monitor.
+
+    Path order is the best guess available, NOT a guarantee. It has matched
+    Settings on one layout and disagreed on the next (2dd78a4), which is why
+    `Monitor.label()` never prints a number claiming to be Windows' own and
+    `number` is described everywhere as this app's hotkey SLOT. Do not
+    reintroduce the claim that this reproduces Display Settings.
     """
     try:
         n_path, n_mode = wt.UINT(), wt.UINT()
@@ -758,27 +768,32 @@ def edid_preferred(hwid):
     result = None
     try:
         base = r"SYSTEM\CurrentControlSet\Enum\DISPLAY"
-        key = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, base + "\\" + hwid)
-        index = 0
-        while result is None:
-            try:
-                inst = winreg.EnumKey(key, index)
-            except OSError:
-                break
-            try:
-                params = winreg.OpenKey(
-                    winreg.HKEY_LOCAL_MACHINE,
-                    "%s\%s\%s\Device Parameters" % (base, hwid, inst))
-                edid = bytes(winreg.QueryValueEx(params, "EDID")[0])
-                d = edid[54:72]                      # first detailed timing
-                width = d[2] | ((d[4] & 0xF0) << 4)
-                lines = d[5] | ((d[7] & 0xF0) << 4)
-                interlaced = bool(d[17] & 0x80)
-                # An interlaced descriptor counts lines per field, so the frame
-                # is twice that.
-                result = (width, lines * (2 if interlaced else 1), interlaced)
-            except (OSError, IndexError):
-                index += 1
+        # Context managers, like friendly_name and known_displays: these were
+        # left open and relied on refcounting to close them.
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE,
+                            base + "\\" + hwid) as key:
+            index = 0
+            while result is None:
+                try:
+                    inst = winreg.EnumKey(key, index)
+                except OSError:
+                    break
+                try:
+                    with winreg.OpenKey(
+                            winreg.HKEY_LOCAL_MACHINE,
+                            "%s\%s\%s\Device Parameters"
+                            % (base, hwid, inst)) as params:
+                        edid = bytes(winreg.QueryValueEx(params, "EDID")[0])
+                    d = edid[54:72]                  # first detailed timing
+                    width = d[2] | ((d[4] & 0xF0) << 4)
+                    lines = d[5] | ((d[7] & 0xF0) << 4)
+                    interlaced = bool(d[17] & 0x80)
+                    # An interlaced descriptor counts lines per field, so the
+                    # frame is twice that.
+                    result = (width, lines * (2 if interlaced else 1),
+                              interlaced)
+                except (OSError, IndexError):
+                    index += 1
     except OSError:
         result = None
     _preferred_cache[hwid] = result
@@ -983,6 +998,24 @@ def monitor_matches_block(mon, spec):
         # 1280x720 worth of pixels and a real display, rotated or not, is over.
         return width * height < size[0] * size[1]
     return (width, height) == size
+
+
+def apply_block_exemptions(monitors, hit):
+    """Of the displays HIT by the rules, which are actually blocked.
+
+    A rule existing is not the same as it applying. The primary is never
+    blocked - the taskbar and the tray icon live there - and blocking every
+    display stands down, because there would be nowhere to evacuate to.
+
+    One definition, shared by `Guard.blocked()` and by `--diag` / `--list`.
+    The CLI used to test the rules directly and so reported a display as
+    blocked that the guard would never block; diagnostics that disagree with
+    the running program come back as bug reports.
+    """
+    kept = [m for m in hit if not m.primary]
+    if kept and len(kept) >= len(monitors):
+        return []
+    return kept
 
 
 def known_displays():
@@ -1451,14 +1484,13 @@ class Guard:
                 log.warning("%s is the primary display; not blocking it - the "
                             "tray icon lives there", keep[0].name)
                 self.primary_warned = True
-            blocked = [m for m in blocked if not m.primary]
         else:
             self.primary_warned = False
+        result = apply_block_exemptions(self.monitors, blocked)
         # Refuse to block everything - there would be nowhere to evacuate to.
-        if blocked and len(blocked) >= len(self.monitors):
+        if not result and [m for m in blocked if not m.primary]:
             log.warning("every display is blocked; standing down")
-            return []
-        return blocked
+        return result
 
     def allowed(self):
         blocked = set(m.device for m in self.blocked())
@@ -1956,6 +1988,7 @@ class TrayApp:
         self.icon_listview = 0
         self.icon_watch_stop = None
         self.icon_watch_thread = None
+        self.registered_hotkeys = set()   # ids actually passed to RegisterHotKey
         self.settings_child = None   # one settings window at a time
         self.window_snapshot = {}   # {hwnd: placement} - the last known good state
         self.windows_frozen = False  # stop snapshotting while a change is underway
@@ -2729,6 +2762,7 @@ class TrayApp:
                 target = self.guard.target_for(action)
                 what = ("move to %s" % target.label() if target
                         else "move to monitor %d (not attached)" % action)
+            self.registered_hotkeys.add(action)
             if user32.RegisterHotKey(self.hwnd, HOTKEY_ID_BASE + action, mods, vk):
                 log.info("hotkey %s -> %s", spec, what)
             else:
@@ -2736,8 +2770,16 @@ class TrayApp:
                             spec, what)
 
     def _unregister_hotkeys(self):
-        for action in range(0, 10):
+        # Unregister exactly what was registered, tracked as it happened.
+        # A hard-coded range(0, 10) left anything above slot 9 bound forever,
+        # since resolve_hotkeys accepts any monitor_<digits>, and a hotkey
+        # nothing acts on is still swallowed before the focused app sees it.
+        # Reading self.hotkeys here would be wrong too: _reload_config
+        # replaces that table before rebuilding, so a slot just removed from
+        # the config would never be released.
+        for action in sorted(self.registered_hotkeys):
             user32.UnregisterHotKey(self.hwnd, HOTKEY_ID_BASE + action)
+        self.registered_hotkeys = set()
 
     def _run_action(self, action):
         if action == 0:
@@ -2867,7 +2909,13 @@ class TrayApp:
                 if right - left < 200 or bottom - top < 100:
                     continue        # too small to be the window someone lost
                 win32gui.ShowWindow(hwnd, win32con.SW_SHOW)
-                win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                # SW_RESTORE un-maximizes, so sending it unconditionally
+                # brought a maximized window back restored-down - a change
+                # the user never asked for, from code whose whole job is to
+                # put things back as they were.
+                if win32gui.GetWindowPlacement(hwnd)[1] != \
+                        win32con.SW_SHOWMAXIMIZED:
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
                 shown.append("%s (%s)" % (shorten(title_of(hwnd), 30),
                                           process_name(hwnd)))
             except Exception:
@@ -3124,6 +3172,26 @@ class TrayApp:
                 blocked = [s for s in blocked if s not in existing]
                 parked = [s for s in parked if parse_block_spec(s)[0] != hwid] + existing
             elif hwid:
+                # Ticking the primary writes a rule that Guard.blocked() will
+                # always exempt, so the tick never lights and the item reads
+                # as broken. Say why instead of leaving them guessing.
+                # Only refuse when EVERY display carrying this id is the
+                # primary. Two identical panels share one hardware id, so
+                # matching on the id alone would refuse to block the twin and
+                # tell the user it was their primary, which it is not.
+                sharing = [m for m in self.guard.monitors if m.hwid == hwid]
+                on_primary = [m for m in sharing if m.primary]
+                if sharing and len(on_primary) == len(sharing):
+                    warn_box("That display is the primary",
+                             "%s is your primary display, so Phantom Monitor "
+                             "will not block it.\n\nThe taskbar and this tray "
+                             "icon live there - blocking it would move your "
+                             "windows off and fence the pointer away from the "
+                             "only menu that could undo it.\n\nMake another "
+                             "display primary in Windows display settings "
+                             "first, if you really do want this one blocked."
+                             % on_primary[0].name)
+                    return
                 restored = [s for s in parked if parse_block_spec(s)[0] == hwid]
                 blocked.extend(restored or [hwid])
                 parked = [s for s in parked if parse_block_spec(s)[0] != hwid]
@@ -3358,27 +3426,26 @@ class TrayApp:
             log.error("could not write %s: %s", os.path.basename(path), exc)
             return False
 
-    def _save_arrangement(self, only_hwid=None, mode=None):
+    def _save_arrangement(self, only_hwid=None):
         """Save the current layout into a named mode.
 
-        With no name, one is asked for in a child process - a modal dialog here
-        would stall the message pump that runs everything else. The slots are
+        The name is asked for in a child process - a modal dialog here would
+        stall the message pump that runs everything else. The slots are
         gathered first, so what gets saved is the screen as it looked when the
         menu was clicked, not after the user has been typing for a minute.
+
+        There was a `mode=` branch here that skipped the name prompt and the
+        replace-confirm. No caller ever passed it, so it was unreachable, and
+        the first one to try would have silently overwritten a saved layout.
+        To store a known name, call `_store_mode` directly and decide there
+        whether to ask.
         """
-        if mode is None:
-            slots = self._gather_slots(only_hwid)
-            if not slots:
-                log.info("nothing to save")
-                return
-            threading.Thread(target=self._name_then_save,
-                             args=(slots, only_hwid), daemon=True).start()
-            return
         slots = self._gather_slots(only_hwid)
         if not slots:
             log.info("nothing to save")
             return
-        self._store_mode(mode, slots, only_hwid)
+        threading.Thread(target=self._name_then_save,
+                         args=(slots, only_hwid), daemon=True).start()
 
     def _name_then_save(self, slots, only_hwid):
         try:
@@ -3402,12 +3469,21 @@ class TrayApp:
         if ask and name in modes:
             # Saving over an existing name silently was a quiet way to lose a
             # layout you had spent time on, with nothing to say it had gone.
-            existing = len(modes[name])
+            # Count what will actually be replaced. Saving one display into
+            # an existing mode merges, keeping the other displays' slots, so
+            # quoting the whole mode's count overstated what was at stake.
+            if only_hwid:
+                doomed = [x for x in modes[name] if x.get("hwid") == only_hwid]
+                what = ("the %d window%s it remembers on this display"
+                        % (len(doomed), "" if len(doomed) == 1 else "s"))
+            else:
+                doomed = modes[name]
+                what = ("all %d window%s in it"
+                        % (len(doomed), "" if len(doomed) == 1 else "s"))
             if not confirm_box(
                     "Replace this arrangement?",
-                    "An arrangement called %r already exists, with %d window%s "
-                    "in it.\n\nReplace it?" % (name, existing,
-                                                "" if existing == 1 else "s")):
+                    "An arrangement called %r already exists.\n\nSaving now "
+                    "replaces %s.\n\nReplace it?" % (name, what)):
                 log.info("not replacing the existing %r arrangement", name)
                 return
         if only_hwid and name in modes:
@@ -3744,6 +3820,12 @@ class TrayApp:
                     self._find_icon_listview()  # Explorer may have restarted
             elif wparam == TIMER_ICONS:
                 user32.KillTimer(self.hwnd, TIMER_ICONS)
+                # Dropped, not deferred, and deliberately so. Inside the quiet
+                # window the moves are usually Explorer's own scramble or our
+                # restore, and nothing here can tell those from a drag the
+                # user made. Deferring would merge a half-scrambled desktop
+                # into the remembered layout, which is worse than missing a
+                # drag made in those few seconds.
                 if time.monotonic() >= self.icons_quiet_until:
                     self._snapshot_icons("icons moved")
             elif wparam == TIMER_VERIFY:
@@ -3755,6 +3837,7 @@ class TrayApp:
                     user32.KillTimer(self.hwnd, TIMER_VERIFY)
             elif wparam == TIMER_WINDOWS:
                 user32.KillTimer(self.hwnd, TIMER_WINDOWS)
+                # Dropped for the same reason as TIMER_ICONS above.
                 if time.monotonic() >= self.icons_quiet_until:
                     self._snapshot_windows("windows moved")
             elif wparam == TIMER_SETTLE:
@@ -3799,10 +3882,6 @@ class TrayApp:
                     # hiding its window rather than moving it, and a hidden
                     # window cannot be restored - so without this, putting the
                     # layout back silently leaves one of them missing.
-                    # Before AND after. A Gecko window - Firefox, Pale Moon -
-                    # has been seen going invisible as a result of being moved
-                    # during a display change, so checking only beforehand
-                    # misses exactly the ones the restore itself provokes.
                     present = set(m.hwid for m in self.guard.monitors)
                     returned = present - self.known_hwids
                     self.known_hwids = present
@@ -3981,9 +4060,13 @@ def print_diagnostics(cfg):
 
     monitors = enum_monitors()
     declared, denied = cfg.get("av_devices"), cfg.get("not_av_devices")
+    specs = cfg.get("blocked_hwids", [])
+    blocked_now = apply_block_exemptions(
+        monitors, [m for m in monitors
+                   if any(monitor_matches_block(m, r) for r in specs)])
+    blocked_devices = set(m.device for m in blocked_now)
     for mon in monitors:
-        blocked = any(monitor_matches_block(mon, r)
-                      for r in cfg.get("blocked_hwids", []))
+        blocked = mon.device in blocked_devices
         print("%s   (hotkey slot %d)" % (mon.name, mon.number))
         print("   hardware id : %s" % (mon.hwid or "?"))
         hint = looks_like_av_device(mon.hwid, mon.name, declared, denied)
@@ -4021,9 +4104,7 @@ def print_diagnostics(cfg):
             if listed else ""))
         print()
 
-    blocked = [m for m in monitors
-               if any(monitor_matches_block(m, r) for r in cfg.get("blocked_hwids", []))]
-    box = cursor_clip_rect(monitors, blocked)
+    box = cursor_clip_rect(monitors, blocked_now)
     # (box,) not box: a bare tuple is read as the format arguments.
     print("pointer fence: %s" % (box if box else
                                  "not possible with this layout / nothing blocked",))
@@ -4111,9 +4192,18 @@ def single_instance():
 def main():
     args = set(a.lower() for a in sys.argv[1:])
     cfg = load_config()
-    setup_logging(cfg.get("log_level", "INFO"),
-                  os.path.join(LOG_DIR, "settings.log")
-                  if "--settings" in args else None)
+    # Every child dialog gets its OWN log, and not the same one as each other.
+    # They are spawned while the tray app is running, and two processes
+    # holding one RotatingFileHandler collide at the rollover: the rename
+    # fails with a sharing violation and both spew tracebacks on every write
+    # (5c6792e). --ask-name can be opened while the settings window is
+    # already up, so sharing settings.log would just move the collision.
+    child_log = None
+    if "--settings" in args:
+        child_log = os.path.join(LOG_DIR, "settings.log")
+    elif "--ask-name" in args:
+        child_log = os.path.join(LOG_DIR, "ask_name.log")
+    setup_logging(cfg.get("log_level", "INFO"), child_log)
     awareness = set_dpi_awareness()
 
     if "--ask-name" in args:
@@ -4155,10 +4245,14 @@ def main():
         return 0
 
     if "--list" in args:
-        for mon in enum_monitors():
-            rules = cfg.get("blocked_hwids", [])
-            blocked = (" [BLOCKED]"
-                       if any(monitor_matches_block(mon, r) for r in rules) else "")
+        live = enum_monitors()
+        rules = cfg.get("blocked_hwids", [])
+        blocked_now = apply_block_exemptions(
+            live, [m for m in live
+                   if any(monitor_matches_block(m, r) for r in rules)])
+        blocked_devices = set(m.device for m in blocked_now)
+        for mon in live:
+            blocked = " [BLOCKED]" if mon.device in blocked_devices else ""
             hint = looks_like_av_device(mon.hwid, mon.name,
                                         cfg.get("av_devices"), cfg.get("not_av_devices"))
             note = ("   <-- looks like a %s, not a monitor" % hint) if hint else ""

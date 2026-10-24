@@ -22,7 +22,9 @@ it back with `save` (25). It moves nothing: the tray app reloads when the child 
   (345). `ask_for_name` (phantommonitor.py:3837, `--ask-name` 4027) is a second such
   child dialog.
 - **Its own log** — `setup_logging` (phantommonitor.py:268) takes a `path`; `main()`
-  4021-4023 passes `logs/settings.log` for `--settings` only.
+  (4192-4210) passes `logs/settings.log` for `--settings` and `logs/ask_name.log`
+  for `--ask-name`. Separate files, not merely non-default ones: `--ask-name` can be
+  spawned while this window is open.
 - **Zoom** — `ZOOM_CHOICES` 96, `ZOOM_FONTS` 97, `font_baseline` 102 (captured at 356),
   `apply_zoom` 113, `windows_scale` 148 (`GetDpiForWindow`), `zoom_factor` 163. Combobox
   423-429, live on `<<ComboboxSelected>>`, saved at 636.
@@ -109,12 +111,16 @@ it back with `save` (25). It moves nothing: the tray app reloads when the child 
   than the key; then come dead keys, non-Latin layouts and IMEs, and a stray ctrl+c in
   a box got bound. Typed boxes plus validation on Save are settled; do not "improve".
 - **Sharing the main rotating log was a real startup-blocking bug**, caught only by the
-  startup smoke test (5c6792e). Any NEW child process needs its own log path —
-  `--ask-name` (phantommonitor.py:4027) still has none.
-- **`load` does not merge `DEFAULT_CONFIG`**, and the toggle loop defaults every key to
-  `True` (`bool(cfg.get(key, True))`, 540), while `block_cursor` defaults to **False**
-  (phantommonitor.py:99): against a `config.json` lacking that key the pointer fence
-  shows ticked and Save turns it on.
+  startup smoke test (5c6792e). Any NEW child process needs its own log path, and its own
+  file rather than another child's: pointing `--ask-name` at `settings.log` would just move
+  the collision, since both can be open at once.
+- **`load` does not merge `DEFAULT_CONFIG`** and cannot: importing the main module from
+  this child process would re-execute it. So every toggle now carries its own default in
+  the `toggles` table, and those defaults must be kept in step with `DEFAULT_CONFIG` by
+  hand. Defaulting them all to `True` was wrong for `block_cursor` (**False**,
+  phantommonitor.py:99): a config missing the key, or an unreadable one — `load` returns
+  `{}` — showed every box ticked, and Save turned the pointer fence on for a user who had
+  never asked for it. **Adding a toggle means adding its real default here.**
 - **The slot combobox does not enforce one display per slot** (614-618,
   `new_targets[slot] = hwid`, last writer wins) where the tray's `_make_assign_action`
   (phantommonitor.py:3066) does: two displays on slot 2 silently lose one.

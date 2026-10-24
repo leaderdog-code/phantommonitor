@@ -119,8 +119,9 @@ The ones that have bitten repeatedly (the full working list is kept outside the 
   symptom is "my settings stopped working" with a tray icon sitting there happily. `single_instance`
   now names the other copy (`:4087-4108`).
 - **A child process sharing the rotating log.** At the rotation boundary both processes threw and
-  startup never completed. The settings child has its own `settings.log` (`5c6792e`); `--ask-name`
-  still does not (KNOWN_BUGS 22).
+  startup never completed. Every child dialog now has a log of its own, and not the same one as
+  each other: `settings.log` for `--settings`, `ask_name.log` for `--ask-name`, which can be opened
+  while the settings window is already up.
 - **Claiming amp behaviour that was never measured.** Several confident statements about receivers
   reverting on a timer had to be withdrawn. Read the EDID; do not infer from the current resolution.
 - **A silent startup crash under pythonw** — no window, no log, and the whole test suite still

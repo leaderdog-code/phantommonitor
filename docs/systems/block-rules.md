@@ -67,9 +67,11 @@ blocked because something looks like an amp.**
 - **Change what counts as blocked** → `Guard.blocked()` `:1426` is the only
   authority: `allowed()` `:1451`, `check_window` `:1642`, `sweep` `:1686`,
   `move_active_to` `:1787`, `_tooltip` `:2011`, `_apply_cursor_clip` `:2484`,
-  `:2492`, tray menu `:2897`, `:2976`. `--diag` (`:3893`, `:3933`) and
-  `--list` (`:4069`) call `monitor_matches_block` *directly*, bypassing the
-  primary exemption — keep them in step or they disagree with the guard.
+  `:2492`, tray menu `:2897`, `:2976`. `--diag` and `--list` cannot build a
+  `Guard` (it logs, and `--diag` must write nothing), so they match the rules
+  themselves and then call **`apply_block_exemptions()`** — the same exemption
+  `Guard.blocked()` uses. Any new "is this blocked?" caller must go through
+  that helper, or it will disagree with the running guard.
 - **Touch the AV lists or the guess** → `phantommonitor.py:706-737` **and**
   `settings_window.py:46-72` (duplicate, identical today); consumers `--diag`
   `:3897`, `:3940`, `:3946`, `--list` `:4070`, `settings_window.py:471`,
@@ -108,7 +110,10 @@ blocked because something looks like an amp.**
 ## Reuse, don't rebuild
 - Read the hwid out of a rule → **`parse_block_spec()`** (`:923`). Never
   `spec.split("@")` in new `phantommonitor.py` code.
-- Monitor vs rule → **`monitor_matches_block()`** (`:948`).
+- Monitor vs rule → **`monitor_matches_block()`** (`:948`). Which of the
+  matches are *actually* blocked → **`apply_block_exemptions(monitors, hit)`**
+  (`:1003`): drops the primary and stands down if that would block everything.
+  `Guard.blocked()`, `--diag` and `--list` all end on it.
 - "What is blocked right now?" → **`Guard.blocked()`** / **`allowed()`**
   (`:1426`, `:1451`), never a fresh loop over `blocked_hwids`.
 - "Is this an amp?" → **`looks_like_av_device()`** (`:715`), passing BOTH

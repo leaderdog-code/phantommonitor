@@ -116,9 +116,9 @@ windows go in these two rectangles" (`fill_slots` 848-872). Handles die at reboo
 - **Undo is a toggle, not a one-shot.** It runs through `_apply_arrangement`, which writes a fresh
   undo at 3481 — pressing Undo twice redoes. The file is never deleted, so the menu item (2857,
   2952) and the Settings button (`undo_state`, settings_window.py:329-333) stay enabled forever.
-- **Saving one display into an existing name merges, it does not replace** (3326-3330) — deliberate,
-  so a mode can be built a screen at a time, but the confirm dialog at 3317-3325 says "Replace it?"
-  and quotes the whole mode's count.
+- **Saving one display into an existing name merges, it does not replace** — deliberate, so a mode
+  can be built a screen at a time. The confirm now counts only what that save will actually
+  overwrite (`_store_mode`); it used to quote the whole mode's count, overstating what was at stake.
 - **A pin and a saved arrangement can disagree** about where an app belongs, with no warning. See
   docs/systems/pinned-apps.md.
 

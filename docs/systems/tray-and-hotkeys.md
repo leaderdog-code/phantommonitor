@@ -48,7 +48,9 @@ else is driven from `_wnd_proc` (3565). There is no other UI thread.
 ## CASCADE — a change here must reach ALL of these
 - **A new hotkey action (beyond rescue + monitor_1..9)**: `resolve_hotkeys` (1893-1926,
   the `monitor_` branch), `_run_action` (2668-2683, handles only 0 and 1-9),
-  `_action_name` (2643), `_unregister_hotkeys` (2664-2666, hard-coded `range(0, 10)`),
+  `_action_name` (2643), `_unregister_hotkeys` (unregisters `self.registered_hotkeys`, the ids
+  actually passed to RegisterHotKey - not a fixed range, and not `self.hotkeys`, which
+  `_reload_config` replaces before rebuilding),
   `DEFAULT_CONFIG["hotkeys"]` (119-124), `config.example.json`, the move submenu
   (2973-2985), the `rows` list at settings_window.py:559-562,
   docs/configuration.md:30-32, README.md:373-382, test_phantommonitor.py:417-430.

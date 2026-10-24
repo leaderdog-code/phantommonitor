@@ -46,7 +46,7 @@ rects · `support_url` "" hides the tray item · `check_updates_on_start`
 
 ### main() flags (phantommonitor.py:4019-4121)
 `--ask-name` (`:4027`) one-field Tk prompt, run as a child so a modal dialog
-cannot stall the tray's message pump · `--arrange [n] [--open]` (`:4031-4050`)
+cannot stall the tray's message pump, logging to `logs/ask_name.log` · `--arrange [n] [--open]` (`:4031-4050`)
 **posts `WM_APP_ARRANGE` to the already-running copy**, exiting 1 with "Phantom
 Monitor is not running" if there is none — it never starts a second copy ·
 `--diag` (`:4052`) · `--settings` (`:4056`) child process, logging to
@@ -88,10 +88,10 @@ A path constant (`:64-71`) cascades to `_show_menu`'s "Edit config file" /
 ## Traps
 - **ad14283** — `setup_logging` tried to create `LOG_DIR` under a read-only program folder, threw before logging existed, and the app died with no window, no tray icon and no log. Hence `_writable`/`DATA_DIR` and the swallowed `OSError`. Any new "write beside the exe" must go through `DATA_DIR`.
 - **d02f13a** — two autostarted copies (portable + installed), each with its own config; the loser exited with a log line nobody reads. Symptom: "my settings stopped working" with a tray icon sitting there happily. An hour to diagnose. Hence the named `warn_box` and the installer's `RemovePortableAutostart`.
-- **5c6792e** — the settings child opened the *same* rotating log; at rollover the rename hit a sharing violation and both processes spewed tracebacks on every write, stopping startup completing. Hence `setup_logging(path=...)` and `settings.log`.
+- **5c6792e** — the settings child opened the *same* rotating log; at rollover the rename hit a sharing violation and both processes spewed tracebacks on every write, stopping startup completing. Hence `setup_logging(path=...)`. Each child needs its OWN file, not merely a non-default one: `--ask-name` can be spawned while the settings window is open, so pointing both at `settings.log` only moves the collision. `settings.log` and `ask_name.log` (`:4199-4206`).
 - **d04c508** — `cursor_locked_app` was read but never initialised; the `AttributeError` killed startup silently under `pythonw` while the whole suite passed. Hence the startup smoke test. Every `self.*` a handler reads must be set in `TrayApp.__init__` (`:1929-1983`).
-- `config.example.json` has drifted: it omits `check_updates_on_start`, `av_devices`, `not_av_devices`, the three `cursor_lock*` keys and `settings_zoom`, and sets `restore_windows: false` where `DEFAULT_CONFIG:105` has `true`. Step 2 is the one that gets skipped.
-- Comments inside `DEFAULT_CONFIG` have slipped off their keys: the `restore_icons` comment sits above `restore_windows` (`:101-105`), the `support_url` one above `app_displays` (`:138-146`). Read the key, not the comment above it.
+- `config.example.json` had drifted badly (seven missing keys, `restore_windows` inverted) and was brought back in step on 2026-10-24. Step 2 is the one that gets skipped - check it.
+- Comments inside `DEFAULT_CONFIG` had slipped off their keys and were realigned on 2026-10-24. Still read the key, not the comment above it.
 
 ## Related subsystems
 `diagnostics.md` (`--diag`, `--list`, update check, `log_level`/`editor`/`support_url`), `packaging.md` (`APP_VERSION`, the installer's single-copy handling and autostart cleanup).
