@@ -34,3 +34,12 @@ RELEASE_NOTES_*.md
 
 # Installer test logs
 install.log
+
+# Local working files - the session scaffolding and the working bug list.
+# KNOWN_BUGS.md quotes this machine's pins and hardware ids out of config.json
+# and arrangement.json, both ignored above for the same reason.
+.claude/
+CLAUDE.md
+docs/TODO.md
+docs/KNOWN_BUGS.md
+docs/memory/

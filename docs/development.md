@@ -26,7 +26,7 @@ python phantommonitor.py
 python test_phantommonitor.py
 ```
 
-138 checks. **Stop the tray app first** — it rescues the test fixtures
+170 checks. **Stop the tray app first** — it rescues the test fixtures
 mid-assertion, and the suite refuses to run while it is live.
 
 The tests drive real windows on your real displays, and pick the smallest
