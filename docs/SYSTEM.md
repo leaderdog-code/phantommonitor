@@ -106,7 +106,7 @@ Run `python scripts/blast_radius.py <concept>` for the live answer; this table i
 
 ## KNOWN HAZARDS
 
-Full list with line numbers in [KNOWN_BUGS.md](KNOWN_BUGS.md). The ones that have bitten repeatedly:
+The ones that have bitten repeatedly (the full working list is kept outside the repository):
 
 - **Sending a full-screen keystroke before the window has landed.** It goes to whatever display the
   window is still on. `_ask_for_fullscreen` polls for the target first — always pass `want_hwid`.

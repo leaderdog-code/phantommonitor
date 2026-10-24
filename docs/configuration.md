@@ -38,7 +38,7 @@ rather than the key you pressed.
 | `enabled` | Master switch |
 | `blocked_hwids` | The block rules |
 | `block_cursor` | Fence the pointer out of blocked displays |
-| `app_displays` | `{"discord.exe": "GSM7814"}` — pin apps to a display |
+| `app_displays` | `{"discord.exe": "ABC1234"}` — pin apps to a display |
 | `cursor_lock_fullscreen` | Hold the pointer inside full-screen apps (default on) |
 | `cursor_never_lock` | Apps exempt from that, e.g. `mstsc.exe` |
 | `cursor_lock_apps` | Force holding for an app, overriding the exemption |

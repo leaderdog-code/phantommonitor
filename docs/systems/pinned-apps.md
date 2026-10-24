@@ -25,7 +25,7 @@ word "pin".
 - **Config** — two keys in `DEFAULT_CONFIG` (phantommonitor.py:155-156), also in
   config.example.json:7-9 and docs/configuration.md:41:
   - `app_displays`: `{exe name (lower-case): display hardware id}`. Live config.json:
-    `{"discord.exe": "GSM5BBF", "signal.exe": "GSM5BBF", "firefox.exe": "GSM5BBF"}`.
+    `{"discord.exe": "ABC1234", "signal.exe": "ABC1234"}`.
   - `app_positions`: `{exe name: {"rel": [dx, dy, w, h]}}`, e.g.
     `"discord.exe": {"rel": [2381, 1334, 1411, 777]}` — an offset within the pinned display.
 - **Lookup** — `Guard.assigned_display` 1701-1704: the exe's pinned display, **or None if it is not
@@ -96,11 +96,11 @@ word "pin".
 
 ## Traps
 - **A pin and a saved arrangement can disagree, and nothing warns you.** `app_displays` says
-  discord.exe belongs on `GSM5BBF` (config.json), while the "Stream" mode in arrangement.json has a
-  discord.exe slot with `"hwid": "GSM7814"`. Applying "Stream" drags Discord to GSM7814
+  discord.exe belongs on `XYZ5678` (config.json), while the "Stream" mode in arrangement.json has a
+  discord.exe slot with `"hwid": "ABC1234"`. Applying "Stream" drags Discord to ABC1234
   (`_apply_arrangement` 3438-3470) and the guard will not pull it back — `place_assigned` only
   fires on open (2152) and on a display returning (3724) — but the next launch, the next time
-  GSM5BBF comes back, or "Send pinned apps to their displays" yanks it home again. There is **no
+  XYZ5678 comes back, or "Send pinned apps to their displays" yanks it home again. There is **no
   check, no warning and no precedence rule**. Say so when it bites; do not invent a silent winner.
 - **Positions were stored absolute once** (fixed 2cd3bcf). The docstring claimed relative while the
   code stored absolute, so moving the monitor made the code discard a valid position and re-centre

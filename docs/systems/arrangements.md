@@ -21,8 +21,8 @@ windows go in these two rectangles" (`fill_slots` 848-872). Handles die at reboo
   `ARRANGEMENT_UNDO_PATH` = `arrangement_undo.json` (71). Real shape, from the live files:
   ```
   {"modes": {"<name>": {"slots": [
-      {"app": "brave.exe", "hwid": "GSM7814", "rel": [x, y, w, h], "exe": "C:\\...\\brave.exe"},
-      {"app": "mstsc.exe", "hwid": "GSM7814", "rel": [0,0,2560,1440], "exe": "...", "full": true}]}}}
+      {"app": "brave.exe", "hwid": "ABC1234", "rel": [x, y, w, h], "exe": "C:\\...\\brave.exe"},
+      {"app": "mstsc.exe", "hwid": "ABC1234", "rel": [0,0,2560,1440], "exe": "...", "full": true}]}}}
   ```
   `exe` and `full` are optional. The undo file is the **legacy** shape — bare `{"slots": [...]}`,
   no `exe`, no `full` (`_write_arrangement` 3264-3265).

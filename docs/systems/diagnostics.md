@@ -24,11 +24,11 @@ thing the report cannot show: how an AV receiver behaves *over time*.
 - `:3005` tray "Diagnose my displays..."; `:3021-3025` "Check for updates", "Project page", and "Support this project" **only if `support_url` is non-empty**.
 - `main()`: `--diag` `:4052-4054` (prints, exits 0); `--list` `:4068-4078` (per monitor: hotkey slot, label, `[BLOCKED]`, AV hint).
 The two probe scripts below are **not in the repository** — `.gitignore` excludes them as
-"throwaway diagnostics with this machine's hardware ids baked in". They exist only in the author's
-working copy, so a clone will not have them; they are documented here because the measurements that
-settled how the receivers behave came out of them.
+"throwaway diagnostics with a specific machine's hardware ids baked in", so a clone will not have
+them. They are described here because the receiver measurements this project relies on came out of
+them, and because anyone reporting a receiver may want to rebuild the equivalent.
 
-- `watch_amp.py` — prints what is on the HDMI chain each time it changes, for 1500 s. Hardcodes `LGS = ("GSM5BBF", "GSM7814")` as "the real monitors" (:7) and reports the first non-LG display, `GONE` when there is none. Run `python watch_amp.py`, then plug/unplug while it watches.
+- `watch_amp.py` — prints what is on the HDMI chain each time it changes, for 1500 s. Hardcodes the local monitors' hardware ids as "the real monitors" (:7) and reports the first display that is not one of them, `GONE` when there is none. Run `python watch_amp.py`, then plug/unplug while it watches.
 - `time_it.py` — measures how long an amp holds the last good EDID, reading the preferred timing straight from `HKLM\SYSTEM\CurrentControlSet\Enum\DISPLAY\<hwid>\...\Device Parameters\EDID` (:14-37), independently of phantommonitor. `python time_it.py` (defaults to `DON0015`) or `python time_it.py YMH3148`; press Enter as you switch the screen off and it reports the elapsed time when the EDID changes. Gives up after 30 min.
 
 Config keys read here (`DEFAULT_CONFIG`): `check_updates_on_start` (`:160`,

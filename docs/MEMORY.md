@@ -25,13 +25,13 @@ Mapped 2026-10-24 at commit `aa2db0f`.
 
 ## Also here
 
-- [KNOWN_BUGS.md](KNOWN_BUGS.md) — 27 open findings from the mapping pass, each marked CONFIRMED or REPORTED. None are fixed.
+- `docs/KNOWN_BUGS.md` — the working list of open findings from the mapping pass. Kept out of the repository; it quotes a specific machine’s configuration.
 - [how-it-works.md](how-it-works.md) · [configuration.md](configuration.md) · [development.md](development.md) — the user-facing docs. Changing behaviour usually means changing one of these too; the CASCADE section of each subsystem doc says which.
 
 ## Standing facts worth knowing before you touch anything
 
 - **The test suite refuses to run while the tray app is live** (`test_phantommonitor.py:11-14`) and needs two real displays. Stop the app first: `python test_phantommonitor.py`.
-- **On this machine the app runs from source**, not from the exe — `pythonw.exe phantommonitor.py`. The built artifacts in `build/dist/` are only for GitHub and the second PC.
+- **Running from source and running the built exe are different installs**, each with its own config beside it. Whichever wins the logon race decides the rules — see `single_instance` and KNOWN_BUGS.
 - **`APP_VERSION` in `phantommonitor.py` and `AppVersion` in `build/installer.iss` must move together.**
 - **Adding a config key touches four places**: `DEFAULT_CONFIG`, `config.example.json`, the Settings UI, and `docs/configuration.md`. That chain is currently drifted — see KNOWN_BUGS 20.
 - **`looks_like_av_device` and `unsafe_hotkey` exist twice**, in `phantommonitor.py` and `settings_window.py`, deliberately — the settings UI is a separate process and importing the main module would re-execute it. Identical as of this mapping. Change one, change both.
