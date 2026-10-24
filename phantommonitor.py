@@ -2207,7 +2207,7 @@ class TrayApp:
                 "tracking %d window position(s) [%s]", len(snapshot), reason)
         return len(snapshot)
 
-    def _ask_for_fullscreen(self, hwnd, want_hwid=None):
+    def _ask_for_fullscreen(self, hwnd, want_hwid=None, after_settle=False):
         """Ask an app to go back into full-screen using its own shortcut.
 
         Nothing outside an app can force it into full-screen, but it will do it
@@ -2222,6 +2222,25 @@ class TrayApp:
         On a thread: this waits, and the message loop must keep running.
         """
         try:
+            # AFTER_SETTLE: wait for the rest of the display-change work to
+            # finish before touching focus. _restore_windows starts this thread
+            # part-way through a sequence that goes on to un-hide windows,
+            # re-home pinned apps and rebuild the desktop icons - every one of
+            # which changes the foreground. Trying to take focus during that
+            # loses every time, and the symptom is a "could not focus" warning
+            # about a window that was perfectly available a second later. The
+            # app is not fighting Windows there, it is fighting itself.
+            #
+            # Only the restore path sets this. An arrangement is a deliberate
+            # user action outside the sequence, and waiting would let an
+            # unrelated WM_DEVICECHANGE - a USB plug - delay it by seconds.
+            if after_settle:
+                settled = time.monotonic() + 15
+                while getattr(self, "windows_frozen", False):
+                    if time.monotonic() > settled:
+                        break   # something is stuck; better to try than not
+                    time.sleep(0.15)
+
             deadline = time.monotonic() + 6
             while True:
                 time.sleep(0.4)
@@ -2374,7 +2393,8 @@ class TrayApp:
                 continue
         for hwnd, want in refullscreen:
             threading.Thread(target=self._ask_for_fullscreen,
-                             args=(hwnd, want), daemon=True).start()
+                             args=(hwnd, want), kwargs={"after_settle": True},
+                             daemon=True).start()
         if restored or skipped:
             log.info("put back %d displaced window(s) [%s]%s%s", restored, reason,
                      "; %d skipped, their old spot is gone" % skipped if skipped else "",

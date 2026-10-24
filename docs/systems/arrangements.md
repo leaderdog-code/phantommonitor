@@ -58,10 +58,14 @@ windows go in these two rectangles" (`fill_slots` 848-872). Handles die at reboo
 - Both menus list the modes: `_show_menu` 2922-2959 and `_show_arrange_menu` 2811-2862.
 - Tests test_phantommonitor.py 588-608, 628-649, 653-679; docs README.md 114-196 and
   docs/configuration.md:131 (the `--arrange` row).
-- `_ask_for_fullscreen` 2210-2260 is shared with the display-change restore (2368-2370) — do not
-  change its signature for arrangements alone. Both callers now collect `(hwnd, hwid)` tuples and
-  pass `want_hwid`; keep them symmetrical. It returns nothing, but logs a warning when the app
-  could not be focused, so a window left windowed is visible in the log rather than silent.
+- `_ask_for_fullscreen` 2210 is shared with the display-change restore (2394-2397) — do not change
+  its signature for arrangements alone. Both callers collect `(hwnd, hwid)` tuples and pass
+  `want_hwid`. They differ in exactly one documented way: the restore passes `after_settle=True`
+  so the thread waits for `windows_frozen` to clear before taking focus, because it is started
+  inside the settle sequence. An arrangement is a user action outside that sequence and must NOT
+  wait — `windows_frozen` is also set by `WM_DEVICECHANGE`, so a USB plug would otherwise delay a
+  button press by up to 15 s. It logs a warning when the app could not be focused, so a window
+  left windowed is visible in the log rather than silent.
 
 ## Rules (invariants)
 1. **A slot is relative + a hardware id, never absolute.** `offset_in` 821 on save, `offset_onto` 827

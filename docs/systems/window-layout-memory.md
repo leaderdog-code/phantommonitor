@@ -113,15 +113,27 @@ placement now differs. Windows the change did not touch are left alone
   resized the session to match. `_ask_for_fullscreen` waits up to 6 s for the window to
   land on `want_hwid` (:2225-2240). **Both** callers now pass it: the restore path carries
   `was_host.hwid` through `refullscreen` as `(hwnd, hwid)` (:2331, :2368-2370), the same
-  shape `_apply_arrangement` uses (:3482-3487). Passing no `want_hwid` is not a shortcut —
-  it skips the settle wait, so the toggle is attempted ~0.4 s into a display-change storm
-  while Windows is still refusing focus, and the session is left windowed.
+  shape `_apply_arrangement` uses (:3482-3487).
+- **The restore used to fight itself for the foreground.** `_restore_windows` starts the
+  `_ask_for_fullscreen` thread part-way through the settle sequence, which then goes on to
+  `_unhide_vanished` (`ShowWindow`), `_rehome_pinned` (moves windows) and `_restore_icons`
+  (pokes Explorer). Every one of those changes the foreground, so the thread's four
+  `SetForegroundWindow` attempts over ~1.4 s never stuck and RDP was left windowed after
+  every wake. It reads exactly like Windows' foreground lock and is not: before 6610c60
+  added the second `_unhide_vanished` and 620bcb5 added `_rehome_pinned`, almost nothing
+  ran after the restore and the same code worked. `_ask_for_fullscreen` now waits for
+  `windows_frozen` to clear (:2237-2242) before touching focus, but **only when called with
+  `after_settle=True`** — which `_restore_windows` passes (:2394-2397) and
+  `_apply_arrangement` deliberately does not: an arrangement is a user action outside the
+  sequence, and waiting there would let an unrelated `WM_DEVICECHANGE` (a USB plug, which
+  also sets `windows_frozen`) hold a button press for seconds. **If you add anything else
+  to the settle sequence, it must run before that flag is cleared** (:3769), or this
+  returns.
 - **A failed focus used to be logged as success.** `send_key_combo` returns `False` when
   `SetForegroundWindow` is refused, and sends nothing; `_ask_for_fullscreen` logged
   "asked ... to go back to full-screen" regardless, so a real failure read as a success in
-  the log. It now warns instead (:2251-2259). Observed live on 2026-10-24 after a wake:
-  the window was put back correctly and stayed windowed, with a warning and a false
-  success line one second apart.
+  the log. It now warns instead (:2266-2274). That false line is what hid the conflict
+  above for as long as it did.
 - **Gecko hides its own window when moved during a display change** (6610c60). Firefox and
   Pale Moon have both done it, and the log showed the restore had just moved the window —
   so un-hiding has to run *after* the restore as well as before (:3717-3723). A hidden
