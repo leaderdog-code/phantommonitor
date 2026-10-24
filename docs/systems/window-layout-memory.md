@@ -111,8 +111,17 @@ placement now differs. Windows the change did not touch are left alone
 - **Sending the full-screen shortcut too early resizes the session** (2ce34ca, reverting
   adbefe0/1965914). RDP was still on its old display, went full-screen on a 4K panel and
   resized the session to match. `_ask_for_fullscreen` waits up to 6 s for the window to
-  land on `want_hwid` (:2225-2240) — but the display-change path passes no `want_hwid`
-  (:2361-2362), so that wait is skipped there.
+  land on `want_hwid` (:2225-2240). **Both** callers now pass it: the restore path carries
+  `was_host.hwid` through `refullscreen` as `(hwnd, hwid)` (:2331, :2368-2370), the same
+  shape `_apply_arrangement` uses (:3482-3487). Passing no `want_hwid` is not a shortcut —
+  it skips the settle wait, so the toggle is attempted ~0.4 s into a display-change storm
+  while Windows is still refusing focus, and the session is left windowed.
+- **A failed focus used to be logged as success.** `send_key_combo` returns `False` when
+  `SetForegroundWindow` is refused, and sends nothing; `_ask_for_fullscreen` logged
+  "asked ... to go back to full-screen" regardless, so a real failure read as a success in
+  the log. It now warns instead (:2251-2259). Observed live on 2026-10-24 after a wake:
+  the window was put back correctly and stayed windowed, with a warning and a false
+  success line one second apart.
 - **Gecko hides its own window when moved during a display change** (6610c60). Firefox and
   Pale Moon have both done it, and the log showed the restore had just moved the window —
   so un-hiding has to run *after* the restore as well as before (:3717-3723). A hidden

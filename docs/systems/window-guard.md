@@ -101,6 +101,12 @@ show/foreground (2160); a `TIMER_SWEEP` tick (set 1968, handled 3649) runs a ful
   nothing (`send_key_combo` 1234-1237); asking for full screen before the window had settled on its
   destination made RDP go full-screen on a 4K panel (`_ask_for_fullscreen` 2216-2220). Modifier
   events also need pacing (1261-1264).
+- **`send_key_combo` returns a bool, and the caller must honour it.** It gives up after four
+  `SetForegroundWindow` attempts over ~1.4 s, warns, and returns `False` having sent *nothing*
+  (1240-1250). A caller that ignores that and logs success turns a real failure into a silent one —
+  which is exactly what happened on the restore path until 2026-10-24. Do not answer a `False` by
+  forcing focus or retrying harder; Windows is refusing on purpose. Give the window time to settle
+  first, then report honestly if it still will not take focus.
 - **Blowing a borderless window up to the destination** buried the taskbar and tray — test
   "stays inside the work area" (test_phantommonitor.py:186-190) exists for that regression. A round
   trip via a small display used to shrink a window permanently — hence `self.clipped` (1403,

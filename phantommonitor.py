@@ -2244,9 +2244,18 @@ class TrayApp:
             if not toggle:
                 return
             label, mods, vk = toggle
-            send_key_combo(hwnd, mods, vk)
-            log.info("asked %r to go back to full-screen (%s)",
-                     shorten(title_of(hwnd), 40), label)
+            # send_key_combo returns False when Windows refused to give the
+            # window focus, in which case it sent nothing. Saying "asked" then
+            # is a lie, and it hid a real failure: the session stayed windowed
+            # while the log claimed the toggle had gone out.
+            if send_key_combo(hwnd, mods, vk):
+                log.info("asked %r to go back to full-screen (%s)",
+                         shorten(title_of(hwnd), 40), label)
+            else:
+                # send_key_combo has already warned why (:1248). Say what it
+                # means for the user, without logging the same failure twice.
+                log.info("%r was left windowed - click it and press %s to put "
+                         "it back", shorten(title_of(hwnd), 40), label)
         except Exception as exc:
             log.debug("could not ask for full-screen: %s", exc)
 
@@ -2328,7 +2337,13 @@ class TrayApp:
                     if (was_host is not None
                             and covers_monitor(was_rect, was_host, fraction=0.98)
                             and win32gui.GetClassName(hwnd) in FULLSCREEN_TOGGLES):
-                        refullscreen.append(hwnd)
+                        # `or None` because Monitor.hwid falls back to "" (:498)
+                        # for a display with no readable EDID. An empty
+                        # want_hwid would be satisfied by whatever unidentified
+                        # display the window happens to overlap, not this one.
+                        # None means "do not check", which is what this path
+                        # did before.
+                        refullscreen.append((hwnd, was_host.hwid or None))
                 except Exception:
                     pass
                 current = win32gui.GetWindowPlacement(hwnd)
@@ -2357,9 +2372,9 @@ class TrayApp:
                     pass
             except Exception:
                 continue
-        for hwnd in refullscreen:
+        for hwnd, want in refullscreen:
             threading.Thread(target=self._ask_for_fullscreen,
-                             args=(hwnd,), daemon=True).start()
+                             args=(hwnd, want), daemon=True).start()
         if restored or skipped:
             log.info("put back %d displaced window(s) [%s]%s%s", restored, reason,
                      "; %d skipped, their old spot is gone" % skipped if skipped else "",
@@ -3471,7 +3486,10 @@ class TrayApp:
                 # a remote session's own one. Only the app can enter
                 # full-screen, and it is asked once the window has landed.
                 if slot.get("full") and is_user_movable(hwnd):
-                    refullscreen.append((hwnd, mon.hwid))
+                    # `or None` for the same reason as the restore path: an
+                    # empty hwid would satisfy the wait against any display
+                    # with no readable EDID. Keep the two callers symmetrical.
+                    refullscreen.append((hwnd, mon.hwid or None))
             except Exception:
                 continue
         for hwnd, want in refullscreen:
