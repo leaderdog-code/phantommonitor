@@ -55,8 +55,9 @@ windows go in these two rectangles" (`fill_slots` 848-872). Handles die at reboo
   `_write_arrangement` 3264 **and** the duplicate `read`/`write` in settings_window.py:210-227.
 - Slot fields: `_gather_slots` 3337 writes them; `_apply_arrangement` 3438-3476, `fill_slots` 848,
   `missing_launches` 895 and `describe` (settings_window.py:243-258) read them.
-- Message numbers: 210-212 here **and** the hardcoded `0x8000 + 5` / `0x8000 + 6` at
-  settings_window.py:312 and 325 — magic numbers there, not imports.
+- Message numbers: 210-212 here **and** the duplicate `WM_APP_ARRANGE_NAMED` /
+  `WM_APP_UNDO_ARRANGE` constants at the top of settings_window.py — named now, but still a
+  separate copy, because that child process must not import this module. Renumber in both.
 - Both menus list the modes: `_show_menu` 2922-2959 and `_show_arrange_menu` 2811-2862.
 - Tests test_phantommonitor.py 588-608, 628-649, 653-679; docs README.md 114-196 and
   docs/configuration.md:131 (the `--arrange` row).

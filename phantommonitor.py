@@ -3137,7 +3137,10 @@ class TrayApp:
         add("Edit config file", lambda: open_text_file(CONFIG_PATH, editor),
             into=more)
         add("Reload settings", self._reload_config, into=more)
-        add("Open config folder", lambda: os.startfile(APP_DIR), into=more)
+        # DATA_DIR, not APP_DIR: when the program folder is not writable the
+        # config lives under %LOCALAPPDATA% instead, and this opened a folder
+        # with no config.json in it - the portable-in-Program-Files case.
+        add("Open config folder", lambda: os.startfile(DATA_DIR), into=more)
         add("View log", lambda: open_text_file(LOG_PATH, editor), into=more)
         sep(into=more)
         add("Check for updates", self._check_updates, into=more)

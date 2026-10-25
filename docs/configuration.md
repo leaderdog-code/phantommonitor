@@ -68,10 +68,15 @@ seals the pointer into a rectangle with nothing in it.
 
 ## Full-screen apps
 
-**Pointer.** A full-screen app holds the pointer inside its own display. Only
-genuinely full-screen windows qualify: 99.5% coverage and no caption or resize
-frame. A maximized window stops at the taskbar and does not count, nor does the
-desktop, nor an overlay spanning several displays.
+**Pointer.** With `block_cursor` on, a full-screen app holds the pointer inside
+its own display. Only genuinely full-screen windows qualify: 99.5% coverage and
+no caption or resize frame. A maximized window stops at the taskbar and does not
+count, nor does the desktop, nor an overlay spanning several displays.
+
+The hold is part of the fence, not a separate feature: it is reached only when
+`block_cursor` and `enabled` are on, something is actually blocked, and the
+layout lets the fence be expressed as one rectangle. With the fence off, no app
+ever gets the hold.
 
 **Moving.** Moving a full-screen window without taking it out of full-screen is
 useless — it arrives borderless with nothing to drag. So the app is asked to

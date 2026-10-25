@@ -93,6 +93,14 @@ def unsafe_hotkey(spec):
     return None
 
 
+# Window messages this child posts to the running guard. They MUST match
+# WM_APP_ARRANGE_NAMED and WM_APP_UNDO_ARRANGE in phantommonitor.py (win32con
+# .WM_APP is 0x8000). Not imported, for the usual reason - importing the main
+# module from this child process would re-execute it - so renumbering there
+# means renumbering here, or Apply and Undo quietly stop working.
+WM_APP_ARRANGE_NAMED = 0x8000 + 5
+WM_APP_UNDO_ARRANGE = 0x8000 + 6
+
 ZOOM_CHOICES = ("1x", "1.25x", "1.5x", "2x", "2.5x", "3x")
 ZOOM_FONTS = ("TkDefaultFont", "TkTextFont", "TkMenuFont", "TkHeadingFont",
               "TkCaptionFont", "TkSmallCaptionFont", "TkIconFont",
@@ -307,7 +315,7 @@ def build_arrangements_tab(tabs, config_path):
                 handle.write(name)
             hwnd = ctypes.windll.user32.FindWindowW("PhantomMonitorWnd", None)
             if hwnd:
-                ctypes.windll.user32.PostMessageW(hwnd, 0x8000 + 5, 0, 0)
+                ctypes.windll.user32.PostMessageW(hwnd, WM_APP_ARRANGE_NAMED, 0, 0)
         except OSError:
             pass
 
@@ -322,7 +330,7 @@ def build_arrangements_tab(tabs, config_path):
         try:
             hwnd = ctypes.windll.user32.FindWindowW("PhantomMonitorWnd", None)
             if hwnd:
-                ctypes.windll.user32.PostMessageW(hwnd, 0x8000 + 6, 0, 0)
+                ctypes.windll.user32.PostMessageW(hwnd, WM_APP_UNDO_ARRANGE, 0, 0)
         except Exception:
             pass
         undo_state()
@@ -520,7 +528,12 @@ def run(config_path, monitors, absent=()):
         seen = ttk.LabelFrame(body, text="Seen before, not connected now")
         seen.grid(row=2, column=0, sticky="ew", **pad)
         for row, (hwid, name) in enumerate(absent):
-            hint = looks_like_av_device(hwid, name, declared)
+            # `denied` too, exactly as the attached-display row does. Without
+            # it, unticking a wrong vendor guess was forgotten the moment the
+            # display was unplugged, and the "looks like an amp" label came
+            # straight back - while the save path deliberately preserves
+            # not_av_devices for displays that are not attached.
+            hint = looks_like_av_device(hwid, name, declared, denied)
             label = "%s   [%s]%s" % (name, hwid,
                                      ("   %s" % hint) if hint else "")
             ttk.Label(seen, text=label).grid(row=row, column=0, sticky="w",

@@ -139,7 +139,8 @@ window handles do not, and it does not break when a page title changes.
 - **Undo.** *Arrangements ▸ Undo that arrangement* puts the windows it
   moved back where they were. It records only the ones it is about to touch,
   just before touching them, so anything it collected from another screen goes
-  home. Available until you arrange again or restart the app.
+  home. It is kept on disk, so quitting and reopening the app does not throw
+  it away — it lasts until the next time you arrange.
 - **Full-screen windows are remembered as full-screen.** A game or a
   full-screen Remote Desktop session covers the whole display, taskbar
   included, so it is recorded as "full-screen on that display" rather than as
@@ -316,14 +317,25 @@ before concluding there is no signal.
 Say you want one screen to be *the Discord screen*, or the dashboard, or the
 chat monitor for a stream. Two steps:
 
-1. Put the app on that screen, then right-click the tray icon and choose
-   **Always open discord.exe on this screen**. (The menu names whatever app you
-   used last, so put it in front first.)
+1. With the app in front, right-click the tray icon and pick the display under
+   **Always open discord.exe on ▸**. You choose the destination from the list,
+   so the app does not have to be sitting on that screen already — which
+   matters, because the screen worth dedicating is usually a blocked one, and
+   that is exactly the screen you cannot drag a window onto.
 2. Tick **Block windows and pointer** for that display, in Settings or from the
    tray.
 
 From then on that screen holds only what you pinned to it. Discord opens there
-every time, nothing else lands there, and the app is never moved off it.
+every time, nothing else lands there, and the app is never moved off it. The
+pointer fence leaves a pinned screen reachable, or a reserved screen would be
+one you could not click on.
+
+Two things keep it that way without you asking:
+
+- Switch that display off and on, and the pinned apps are sent back to it as
+  soon as it reappears.
+- **Send pinned apps to their displays**, in the tray menu, does the same on
+  demand — useful after something has wandered.
 
 **You can still use that screen normally.** Click on it, type on it, drag things
 around on it. Blocking stops *other* windows arriving; it does not lock you out.
@@ -354,9 +366,13 @@ each display.
 
 ## Games
 
-A full-screen app holds the pointer inside its own display, reapplied whenever
-you alt-tab back in. Without that, stepping out to check a map loses the screen
-edge for the rest of the session.
+With the pointer fence on, a full-screen app holds the pointer inside its own
+display, reapplied whenever you alt-tab back in. Without that, stepping out to
+check a map loses the screen edge for the rest of the session.
+
+This rides on the fence rather than standing alone: it needs **Keep the mouse
+pointer off blocked displays** ticked, the guard enabled, and a blocked display
+the fence can actually wall off. With the fence off, no game gets the hold.
 
 Naming games individually does not scale, so it is opt-out:
 

@@ -138,8 +138,9 @@ it back with `save` (25). It moves nothing: the tray app reloads when the child 
   first; that function is not imported for the usual child-process reason and not copied
   whole, because the UI never needs the size or interlace parts.
 - Displays sort by slot **on open, not live** (462) — live sorting made rows jump
-  mid-edit (d84103e). `build_arrangements_tab` hard-codes `0x8000 + 5` / `0x8000 + 6`
-  (310, 325) instead of the named constants, and docs/configuration.md:7-32 never
+  mid-edit (d84103e). `build_arrangements_tab` posts the named `WM_APP_ARRANGE_NAMED` /
+  `WM_APP_UNDO_ARRANGE` defined at the top of this file, which **must** be kept equal to the
+  ones in phantommonitor.py (not imported, child process), and docs/configuration.md:7-32 never
   mentions that tab.
 
 ## Related subsystems
