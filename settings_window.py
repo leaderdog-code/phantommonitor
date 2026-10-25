@@ -445,9 +445,21 @@ def run(config_path, monitors, absent=()):
     declared = list(cfg.get("av_devices") or [])
     denied = list(cfg.get("not_av_devices") or [])
 
+    def rule_hwid(spec):
+        """The hardware id out of a block rule, qualifier and all discarded.
+
+        The same thing `parse_block_spec` (phantommonitor.py) returns first.
+        That function is not imported for the usual reason - this is a child
+        process and importing the main module would re-execute it - and it
+        is not worth copying whole, because the UI never needs the size or
+        interlace parts. One place to change if the syntax ever grows a
+        second separator.
+        """
+        return str(spec).split("@")[0].strip()
+
     def rule_for(hwid):
         for spec in rules:
-            if spec.split("@")[0].strip() == hwid:
+            if rule_hwid(spec) == hwid:
                 return spec
         return None
 
@@ -586,13 +598,22 @@ def run(config_path, monitors, absent=()):
         row=len(rows) + 1, column=0, columnspan=2, sticky="w", padx=10, pady=(0, 8))
 
     def apply_and_close():
-        new_hotkeys = dict((k, v.get().strip()) for k, v in entries.items())
-        for _key, spec in sorted(new_hotkeys.items()):
+        # Validate only what is on screen. Anything hand-edited into a slot
+        # this window never showed must not be able to block a Save over a
+        # field the user cannot see to correct.
+        typed = dict((k, v.get().strip()) for k, v in entries.items())
+        for _key, spec in sorted(typed.items()):
             problem = unsafe_hotkey(spec)
             if problem:
                 # Leave the window open so it can be corrected.
                 warning.set("%s  -  %s" % (spec, problem))
                 return
+        # Start from what is already there, so slots above the ones shown
+        # survive. The rows stop at max(4, len(monitors)), and writing only
+        # the visible fields deleted a hand-edited monitor_5 the first time
+        # Save was pressed.
+        new_hotkeys = dict(cfg.get("hotkeys") or {})
+        new_hotkeys.update(typed)
 
         new_rules, new_parked = [], list(parked)
         for _n, hwid, _w, _h, _x, _y, _p in monitors:
@@ -600,13 +621,13 @@ def run(config_path, monitors, absent=()):
             if block_vars[hwid].get():
                 # Re-ticking restores a parked rule verbatim, qualifier and all.
                 revived = next((s for s in new_parked
-                                if s.split("@")[0].strip() == hwid), None)
+                                if rule_hwid(s) == hwid), None)
                 new_rules.append(existing or revived or hwid)
                 new_parked = [s for s in new_parked
-                              if s.split("@")[0].strip() != hwid]
+                              if rule_hwid(s) != hwid]
             elif existing:
                 new_parked = [s for s in new_parked
-                              if s.split("@")[0].strip() != hwid] + [existing]
+                              if rule_hwid(s) != hwid] + [existing]
         # Displays that are not attached: keep whatever the user ticked here,
         # and leave rules for anything not shown at all untouched.
         shown = set(m[1] for m in monitors) | set(absent_vars)
@@ -616,14 +637,33 @@ def run(config_path, monitors, absent=()):
                 new_rules.append(existing or hwid)
             elif existing:
                 new_parked = [s for s in new_parked
-                              if s.split("@")[0].strip() != hwid] + [existing]
-        new_rules += [s for s in rules if s.split("@")[0].strip() not in shown]
+                              if rule_hwid(s) != hwid] + [existing]
+        new_rules += [s for s in rules if rule_hwid(s) not in shown]
 
+        # One display per slot. Assigning silently here let the last writer
+        # win, so picking slot 2 twice dropped a display from the mapping
+        # with nothing to say it had gone.
+        #
+        # The tray's _make_assign_action deliberately does the opposite: it
+        # takes the slot over from whoever held it. That is right there -
+        # the submenu shows one display at a time, so reassigning is plainly
+        # what was asked for. Here both displays are on screen at once, and
+        # quietly discarding one of two visible choices is not. Do not
+        # "align" the two; the difference is the point.
         new_targets = {}
         for _n, hwid, _w, _h, _x, _y, _p in monitors:
             slot = slot_vars[hwid].get()
-            if slot and slot != "-":
-                new_targets[slot] = hwid
+            if not slot or slot == "-":
+                continue
+            if slot in new_targets:
+                names = dict((m[1], m[0]) for m in monitors)
+                warning.set(
+                    "Slot %s is set on two displays (%s and %s)  -  each slot "
+                    "can only point at one." % (slot, names.get(new_targets[slot],
+                                                                new_targets[slot]),
+                                                names.get(hwid, hwid)))
+                return
+            new_targets[slot] = hwid
 
         cfg["blocked_hwids"] = new_rules
         cfg["blocked_rules_parked"] = new_parked

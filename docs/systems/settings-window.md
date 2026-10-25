@@ -121,11 +121,22 @@ it back with `save` (25). It moves nothing: the tray app reloads when the child 
   phantommonitor.py:99): a config missing the key, or an unreadable one — `load` returns
   `{}` — showed every box ticked, and Save turned the pointer fence on for a user who had
   never asked for it. **Adding a toggle means adding its real default here.**
-- **The slot combobox does not enforce one display per slot** (614-618,
-  `new_targets[slot] = hwid`, last writer wins) where the tray's `_make_assign_action`
-  (phantommonitor.py:3066) does: two displays on slot 2 silently lose one.
-- **`slot_count = max(4, len(monitors))` (410)** bounds the hotkey rows, so a
-  hand-edited `monitor_5` on four displays is dropped on the first Save.
+- **The slot combobox refuses two displays on one slot** and says so, rather than letting
+  the last writer win and dropping one silently. The tray's `_make_assign_action`
+  (phantommonitor.py) deliberately does the opposite and takes the slot over: its submenu
+  shows one display at a time, so reassigning is plainly what was asked for, whereas here
+  both are on screen at once. **The asymmetry is intentional — do not "align" them.**
+- **`slot_count = max(4, len(monitors))`** still bounds the hotkey rows, but `Save` no
+  longer deletes what it cannot show: `apply_and_close` starts from the existing
+  `cfg["hotkeys"]` and updates it with the visible fields, so a hand-edited `monitor_5`
+  survives. Only the visible fields are validated — a slot the window never drew must not
+  be able to block a Save over a field nobody can see to correct. Note that
+  `hotkey_targets` is still rebuilt from attached displays only, so a kept `monitor_N` can
+  name a slot with no display mapping; harmless, and true before this change too.
+- **Block rules are read through one local `rule_hwid()`**, not six inline
+  `spec.split("@")` calls. It returns what `parse_block_spec` (phantommonitor.py) returns
+  first; that function is not imported for the usual child-process reason and not copied
+  whole, because the UI never needs the size or interlace parts.
 - Displays sort by slot **on open, not live** (462) — live sorting made rows jump
   mid-edit (d84103e). `build_arrangements_tab` hard-codes `0x8000 + 5` / `0x8000 + 6`
   (310, 325) instead of the named constants, and docs/configuration.md:7-32 never
