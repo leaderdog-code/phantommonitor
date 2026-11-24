@@ -366,25 +366,30 @@ each display.
 
 ## Games
 
-With the pointer fence on, a full-screen app holds the pointer inside its own
-display, reapplied whenever you alt-tab back in. Without that, stepping out to
-check a map loses the screen edge for the rest of the session.
+Name a game and the pointer is held inside its display, reapplied whenever you
+alt-tab back in. Without that, stepping out to check a map loses the screen
+edge for the rest of the session.
+
+```json
+"cursor_lock_apps": ["dontstarve_steam_x64.exe", "yourgame.exe"]
+```
+
+**Only the apps you name.** A full-screen browser, video player or PDF reader
+looks exactly like a game from the outside — borderless, covering the display —
+and wants the opposite: to reach your other screens. Being trapped on one
+monitor with no visible cause is a miserable way to meet a tray utility, so
+nothing is held unless you ask for it.
+
+If you would rather have it the other way, `"cursor_lock_fullscreen": true`
+holds anything genuinely full-screen, with `cursor_never_lock` as the
+exceptions. That was the default once; the exception list only ever grew.
 
 This rides on the fence rather than standing alone: it needs **Keep the mouse
 pointer off blocked displays** ticked, the guard enabled, and a blocked display
-the fence can actually wall off. With the fence off, no game gets the hold.
+the fence can actually wall off. With the fence off, no app gets the hold.
 
-Naming games individually does not scale, so it is opt-out:
-
-```json
-"cursor_never_lock": [
-  "mstsc.exe", "explorer.exe", "screenclippinghost.exe", "snippingtool.exe"
-]
-```
-
-Full-screen RDP is excluded by default — being locked into a remote session
-would strand the pointer. Overlays that span several displays, like the
-`Win+Shift+S` snip layer, never claim the pointer either.
+Overlays spanning several displays, like the `Win+Shift+S` snip layer, never
+claim the pointer under either setting.
 
 ## Hotkeys
 

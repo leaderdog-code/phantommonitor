@@ -16,7 +16,8 @@ a single running copy, dispatches the CLI flags, installs or removes autostart.
 - `:64-65` `DATA_DIR` = `APP_DIR` **if writable**, else `%LOCALAPPDATA%\PhantomMonitor` (then `~`). A portable exe dropped in Program Files keeps running instead of dying with no window, tray icon or log.
 - `:66-71` `CONFIG_PATH`, `LOG_DIR`, `LOG_PATH`, `ICON_LAYOUT_PATH`, `ARRANGEMENT_PATH`, `ARRANGEMENT_UNDO_PATH` — all under `DATA_DIR`. `:76-80` `STARTUP_VBS` = `%APPDATA%\...\Startup\PhantomMonitor.vbs`.
 - `:268-293` `setup_logging` — `RotatingFileHandler`, 512 KB x 3, in try/except so logging can never be what stops startup; `path=` gives a child its own file. `:296-312` `set_dpi_awareness` — per-monitor-v2, per-monitor, system, none.
-- `:385-394` `load_config` — defaults, then `update()` from disk; unreadable JSON logs a warning and falls back to defaults (a typo silently loses every setting rather than crashing). `:396-401` `save_config`.
+- `load_config` — defaults, then `update()` from disk; unreadable JSON logs a warning, falls back to defaults **for that run only** and sets `config_was_read = False`. `save_config` writes the whole merged dict.
+- `migrate_config` + `CONFIG_REVISION` — carries a changed shipped default across to configs already on disk, which a flipped default never reaches on its own. Called from `TrayApp.__init__` (the only place that should rewrite the file), never from `load_config`: `--diag` must write nothing and the suite loads the live config. Skipped when `config_was_read` is False. `config_revision` is deliberately **absent** from `DEFAULT_CONFIG` — a default there would leave every old file looking already-migrated. Revision 1 turns `cursor_lock_fullscreen` off.
 - `:349-382` `open_text_file` — notepad.exe default, `editor` override, env vars expanded; deliberately not `os.startfile`, as `.json`/`.log` often have no association.
 - `:3962-3984` `running_copy_path`; `:3986-3997` `confirm_box`; `:3999-4012` `warn_box`; `:4014-4016` `single_instance` (mutex `Global\PhantomMonitor_SingleInstance`).
 - `:3534-3559` `_toggle_autostart` — writes a VBS launching the exe directly when frozen, else `pythonw.exe` + script; `:3160-3170` `_reload_config`; `:4019-4121` `main()`.
@@ -38,7 +39,8 @@ hwid, since display numbers are reassigned by hot-plugging ·
 `blocked_rules_parked` unticked rules, verbatim · `ignore_process_names`,
 `ignore_window_classes` · `editor` "" = notepad.exe · `av_devices` /
 `not_av_devices` amp declarations and overrules — labels only, nothing is
-blocked on this basis · `cursor_lock_apps`, `cursor_lock_fullscreen` true,
+blocked on this basis · `cursor_lock_apps` (holding the pointer is OPT-IN), `cursor_lock_fullscreen` **false**
+since v1.1.7 — `migrate_config` turns it off in configs written before that,
 `cursor_never_lock` (mstsc, explorer, screenclippinghost, snippingtool) ·
 `settings_zoom` 1.0 · `app_displays` exe→hwid pin, `app_positions` remembered
 rects · `support_url` "" hides the tray item · `check_updates_on_start`

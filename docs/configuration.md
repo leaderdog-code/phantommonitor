@@ -39,7 +39,8 @@ rather than the key you pressed.
 | `blocked_hwids` | The block rules |
 | `block_cursor` | Fence the pointer out of blocked displays |
 | `app_displays` | `{"discord.exe": "ABC1234"}` — pin apps to a display |
-| `cursor_lock_fullscreen` | Hold the pointer inside full-screen apps (default on) |
+| `cursor_lock_apps` | Apps the pointer is held inside, whatever shape they are. Opt-in; nothing else is held |
+| `cursor_lock_fullscreen` | Hold the pointer inside **anything** genuinely full-screen (default **off**). The old blanket behaviour |
 | `cursor_never_lock` | Apps exempt from that, e.g. `mstsc.exe` |
 | `cursor_lock_apps` | Force holding for an app, overriding the exemption |
 | `restore_windows` / `restore_icons` | Put things back after a display change |

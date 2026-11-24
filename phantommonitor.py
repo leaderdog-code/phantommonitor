@@ -72,7 +72,10 @@ ARRANGEMENT_UNDO_PATH = os.path.join(DATA_DIR, "arrangement_undo.json")
 PROJECT_URL = "https://github.com/leaderdog-code/phantommonitor"
 RELEASES_URL = PROJECT_URL + "/releases"
 LATEST_API = "https://api.github.com/repos/leaderdog-code/phantommonitor/releases/latest"
-APP_VERSION = "1.1.6"   # keep in step with AppVersion in build/installer.iss
+APP_VERSION = "1.1.7"   # keep in step with AppVersion in build/installer.iss
+# Bumped when a shipped default changes in a way an existing config must
+# follow. `config_revision` in the file records the last one applied.
+CONFIG_REVISION = 1
 STARTUP_VBS = os.path.join(
     os.environ.get("APPDATA", ""),
     "Microsoft", "Windows", "Start Menu", "Programs", "Startup",
@@ -142,8 +145,20 @@ DEFAULT_CONFIG = {
     # so the built-in list catches up.
     "av_devices": [],
     "not_av_devices": [],
+    # Holding the pointer INSIDE an app is opt-in: name it in
+    # cursor_lock_apps. Nothing else is held, whatever shape it is.
+    #
+    # It used to be opt-out - anything genuinely full-screen was held, with
+    # cursor_never_lock carrying the exceptions. That list only ever grew,
+    # because "borderless and covering the display" describes a full-screen
+    # browser, video player or PDF reader exactly as well as it describes a
+    # game, and those want the opposite: to reach the other screens. Being
+    # trapped with no visible cause is a bad first impression of a tray app.
+    #
+    # cursor_lock_fullscreen brings the old blanket behaviour back for anyone
+    # who wants it. cursor_never_lock still applies on top of it.
     "cursor_lock_apps": [],
-    "cursor_lock_fullscreen": True,
+    "cursor_lock_fullscreen": False,
     "cursor_never_lock": ["mstsc.exe", "explorer.exe",
                           "screenclippinghost.exe", "snippingtool.exe"],
     # Zoom for the settings window only, 1.0 to 3.0. Windows' own DPI scaling
@@ -387,14 +402,69 @@ def open_text_file(path, editor=""):
         return False
 
 
+def migrate_config(cfg):
+    """Apply default changes an existing config would otherwise never see.
+
+    A flipped default reaches new installs only: `save_config` writes the
+    whole merged dict, so a file written by an older version keeps its old
+    value forever. That is right for a preference and wrong for a default
+    that was trapping people.
+
+    Revision 1: `cursor_lock_fullscreen` held the pointer inside anything
+    full-screen. A full-screen browser, video player or PDF reader is
+    indistinguishable from a game and wants the opposite, so holding is now
+    opt-in via `cursor_lock_apps`. Anyone who liked it can turn it back on.
+
+    Returns True when something changed, so the caller writes the file.
+
+    `config_revision` is deliberately NOT in DEFAULT_CONFIG. `load_config`
+    starts from the defaults and updates from the file, so a default would
+    leave every old config already looking migrated. Absent means revision
+    0, which is exactly what a file written before this existed is.
+
+    Called from `TrayApp.__init__`, not `load_config`: only the long-running
+    app should rewrite the file. `--diag` must write nothing, and the test
+    suite loads the live config.
+    """
+    if cfg.get("config_revision", 0) >= CONFIG_REVISION:
+        return False
+    if cfg.get("cursor_lock_fullscreen"):
+        cfg["cursor_lock_fullscreen"] = False
+        log.warning("holding the pointer inside ANY full-screen app is now "
+                    "off: it caught full-screen browsers and video players "
+                    "as readily as games. Name the apps you want held in "
+                    "cursor_lock_apps, or set cursor_lock_fullscreen back "
+                    "to true for the old behaviour.")
+    cfg["config_revision"] = CONFIG_REVISION
+    return True
+
+
+# False when the LAST load_config() fell back to defaults because the file
+# could not be read. The migration in TrayApp.__init__ checks it before
+# writing: the defaults in memory are a stand-in, not the user's settings,
+# and saving them over a file a typo broke would lose every setting.
+#
+# It is not a general write lock. Deliberate saves - toggling a switch,
+# pinning an app - still write, because the user asked for that and a
+# broken file was going to be replaced either way. Only the automatic,
+# unasked-for migration defers. `_reload_config` re-reads, so the flag
+# always describes the most recent load.
+config_was_read = True
+
+
 def load_config():
+    global config_was_read
     cfg = dict(DEFAULT_CONFIG)
+    config_was_read = True
     if os.path.exists(CONFIG_PATH):
         try:
             with open(CONFIG_PATH, "r", encoding="utf-8") as handle:
                 cfg.update(json.load(handle))
         except (OSError, ValueError) as exc:
-            log.warning("config unreadable (%s), using defaults", exc)
+            log.warning("config unreadable (%s), using defaults for this "
+                        "run - the file is left alone so it can be fixed",
+                        exc)
+            config_was_read = False
     return cfg
 
 
@@ -1193,27 +1263,25 @@ def covers_monitor(rect, mon, fraction=0.95):
 
 
 def cursor_lock_rect(rect, monitors, blocked, app, lock_apps,
-                     never_lock=(), lock_fullscreen=True, borderless=False):
-    """The display to confine the pointer to for a full-screen app, or None.
+                     never_lock=(), lock_fullscreen=False, borderless=False):
+    """The display to confine the pointer to, or None to leave it free.
 
-    Default is to hold it. A full-screen app is one the user is inside, and
-    a game that loses its cursor at the screen edge is unplayable - alt-tab
-    out once to check a map or answer a message and the edge is gone for the
-    rest of the session, because nothing puts the confinement back.
-
-    Naming games individually does not scale: a Steam or Epic library is
-    hundreds of executables. So this is opt-OUT. cursor_never_lock carries
-    the exceptions, and full-screen RDP is the one that matters - being
-    locked into a remote session would strand the pointer away from every
+    Two full-screen apps want opposite things, so there is no single rule.
+    A game wants the pointer held inside it, and wants that back the instant
+    it is alt-tabbed into, having gone to check a map or answer a message -
+    without it, the screen edge is gone for the rest of the session. A
+    full-screen browser, video player, PDF reader or Remote Desktop session
+    wants no such thing: holding the pointer strands it away from every
     other screen.
 
-    Two full-screen apps can want opposite things, so this cannot be one rule.
-    A game wants the pointer held inside it and wants that back the instant you
-    alt-tab in, having gone to check a map or answer a message. A full-screen
-    RDP session on one monitor wants no such thing - being locked into it would
-    strand the pointer away from every other screen.
+    Nothing distinguishes them from the outside. "Borderless and covering
+    the display" describes all of them.
 
-    So confinement is opt-in per executable. Anything not listed is left alone.
+    So holding is OPT-IN: name the app in `lock_apps` and it is held
+    whatever shape it is; anything unnamed is left alone. `lock_fullscreen`
+    restores the old blanket behaviour - hold anything genuinely full-screen
+    - for anyone who prefers it, with `never_lock` as the exceptions. That
+    was the default once, and the exception list only ever grew.
     """
     if not rect or not monitors:
         return None
@@ -1989,6 +2057,12 @@ class TrayApp:
         self.icon_watch_stop = None
         self.icon_watch_thread = None
         self.registered_hotkeys = set()   # ids actually passed to RegisterHotKey
+        # Only the tray app rewrites config.json, only once, and never
+        # when the file could not be read: migrating a fallback copy of the
+        # defaults would write them over a config a typo had made
+        # temporarily unreadable, losing every setting for good.
+        if config_was_read and migrate_config(self.cfg):
+            save_config(self.cfg)
         self.settings_child = None   # one settings window at a time
         self.window_snapshot = {}   # {hwnd: placement} - the last known good state
         self.windows_frozen = False  # stop snapshotting while a change is underway
@@ -2625,7 +2699,7 @@ class TrayApp:
             fg_rect, self.guard.monitors, self.guard.blocked(), fg_app,
             self.cfg.get("cursor_lock_apps"),
             self.cfg.get("cursor_never_lock"),
-            self.cfg.get("cursor_lock_fullscreen", True),
+            self.cfg.get("cursor_lock_fullscreen", False),
             borderless=(fg is not None and not is_user_movable(fg)))
         if lock is not None:
             held = wt.RECT(lock[0], lock[1], lock[2], lock[3])

@@ -511,10 +511,11 @@ check("pinning to some other display does not unfence this one",
 check("no pins at all leaves every blocked display fenced",
       len(mg.fenceable(BLOCKED_ALL, None)) == len(BLOCKED_ALL))
 
-# Naming every game is impossible with a Steam or Epic library, so a
-# full-screen app holds the pointer by default and the exceptions are named.
+# Holding the pointer is OPT-IN since 1.1.7: a full-screen browser, video
+# player or PDF reader looks exactly like a game and wants the opposite.
+# lock_fullscreen=True below asks for the old blanket behaviour explicitly.
 FS = next(m for m in guard.monitors if m.primary)
-check("a full-screen app holds the pointer by default",
+check("a full-screen app is held when the blanket rule is asked for",
       mg.cursor_lock_rect(FS.rect, guard.monitors, [], "somegame.exe",
                           [], ["mstsc.exe"], True, True) == FS.rect)
 check("full-screen RDP is excluded, so the pointer stays free",
@@ -544,10 +545,11 @@ check("pinning to some other display does not unfence this one",
 check("no pins at all leaves every blocked display fenced",
       len(mg.fenceable(BLOCKED_ALL, None)) == len(BLOCKED_ALL))
 
-# Naming every game is impossible with a Steam or Epic library, so a
-# full-screen app holds the pointer by default and the exceptions are named.
+# Holding the pointer is OPT-IN since 1.1.7: a full-screen browser, video
+# player or PDF reader looks exactly like a game and wants the opposite.
+# lock_fullscreen=True below asks for the old blanket behaviour explicitly.
 FS = next(m for m in guard.monitors if m.primary)
-check("a full-screen app holds the pointer by default",
+check("a full-screen app is held when the blanket rule is asked for",
       mg.cursor_lock_rect(FS.rect, guard.monitors, [], "somegame.exe",
                           [], ["mstsc.exe"], True, True) == FS.rect)
 check("full-screen RDP is excluded, so the pointer stays free",
@@ -780,6 +782,59 @@ check("overrule beats declaration when both name an id",
 # nothing in the log. Start it for real and require it to reach the end of its
 # startup sequence.
 import subprocess
+# 25 - holding the pointer inside an app is opt-in, and a config written
+#      before that change has to be carried across.
+check("an unnamed full-screen app is NOT held by default",
+      mg.cursor_lock_rect(FS.rect, guard.monitors, [], "somegame.exe",
+                          [], [], borderless=True) is None)
+check("a named app is held even though nothing else is",
+      mg.cursor_lock_rect(FS.rect, guard.monitors, [], "somegame.exe",
+                          ["somegame.exe"], [], borderless=True) == FS.rect)
+check("the shipped default leaves full-screen apps alone",
+      mg.DEFAULT_CONFIG["cursor_lock_fullscreen"] is False)
+
+
+# Through the MERGED dict load_config really produces, not a bare one. A
+# config_revision default would leave every old file looking migrated, and
+# a bare-dict test would never notice.
+def _merged(stored):
+    merged = dict(mg.DEFAULT_CONFIG)
+    merged.update(stored)
+    mg.migrate_config(merged)
+    return merged
+
+
+check("config_revision is not a default, or nothing would ever migrate",
+      "config_revision" not in mg.DEFAULT_CONFIG)
+check("an old config is migrated off the blanket hold",
+      _merged({"cursor_lock_fullscreen": True})["cursor_lock_fullscreen"]
+      is False)
+check("migrating stamps the revision, so it happens once",
+      _merged({"cursor_lock_fullscreen": True})["config_revision"]
+      == mg.CONFIG_REVISION)
+check("someone who turned it back on is left alone",
+      _merged({"cursor_lock_fullscreen": True,
+               "config_revision": mg.CONFIG_REVISION})
+      ["cursor_lock_fullscreen"] is True)
+
+# An unreadable config must never be written over: the defaults in memory
+# are a stand-in, and saving them would destroy a file a typo broke.
+_real_config = mg.CONFIG_PATH
+_broken = _real_config + ".broken"
+try:
+    with open(_broken, "w", encoding="utf-8") as _h:
+        _h.write("{ not json")
+    mg.CONFIG_PATH = _broken
+    mg.load_config()
+    check("an unreadable config is flagged, not overwritten",
+          mg.config_was_read is False)
+finally:
+    mg.CONFIG_PATH = _real_config
+    if os.path.exists(_broken):
+        os.remove(_broken)
+    mg.load_config()         # leave the module pointing at the real file
+
+
 MARKER = "tracking"          # the last line startup logs
 log_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "logs", "phantommonitor.log")

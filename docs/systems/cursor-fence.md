@@ -19,10 +19,11 @@ block toggle (3061), pin change (3227), `_toggle_cursor_block` (3522), `_toggle_
   (`app_displays`), because a reserved chat/dashboard screen must stay clickable.
 - **The rectangle** — `cursor_clip_rect` 681: the bounding box of the allowed displays, returned
   only if no blocked display overlaps it (694-699); otherwise `None`.
-- **Holding the pointer inside an app** — `cursor_lock_rect` 1162. Never for a blocked host (1188). A name in `cursor_lock_apps` wins outright, whatever the shape (1197-1203). Otherwise it must be
-  borderless (`is_user_movable` false) *and* cover 99.5% of its host (1203), must not
-  `spans_displays` > 1 (1210), must not be in `cursor_never_lock` (1212-1213), and
-  `cursor_lock_fullscreen` must be on (1214).
+- **Holding the pointer inside an app** — `cursor_lock_rect`. Never for a blocked host.
+  **Opt-in:** a name in `cursor_lock_apps` wins outright, whatever the shape. Anything
+  unnamed is left alone, because `cursor_lock_fullscreen` ships **off** since v1.1.7.
+  Turned on, it restores the blanket rule: borderless (`is_user_movable` false) *and*
+  covering 99.5% of its host, not `spans_displays` > 1, not in `cursor_never_lock`.
 - **Not stomping someone else's clip** — `_apply_cursor_clip` 2546-2570 reads `GetClipCursor` first.
   Identical to ours → nothing to do (2549-2551). Inside our allowed box → it already satisfies the
   fence, so leave it (2552), **but only** if `clip_is_owned` (655) says the foreground window could
@@ -37,8 +38,9 @@ block toggle (3061), pin change (3227), `_toggle_cursor_block` (3522), `_toggle_
   (2672-2679): the tray icon may be outside a bad clip, so rescue must not depend on it.
 - **UI/config** — tray item "Keep pointer off blocked displays" 2914-2916; settings checkbox
   settings_window.py:532; defaults `block_cursor` DEFAULT_CONFIG:99, `cursor_lock_apps` 150,
-  `cursor_lock_fullscreen` 151, `cursor_never_lock` 152-153 (mstsc.exe, explorer.exe,
-  screenclippinghost.exe, snippingtool.exe).
+  `cursor_lock_fullscreen` (**False** since v1.1.7), `cursor_never_lock` (mstsc.exe,
+  explorer.exe, screenclippinghost.exe, snippingtool.exe — only consulted when
+  `cursor_lock_fullscreen` is on).
 
 ## CASCADE — a change here must reach ALL of these
 - Every `_apply_cursor_clip` / `_release_cursor_clip` call site: phantommonitor.py:1975, 2159, 2679,
@@ -85,6 +87,14 @@ block toggle (3061), pin change (3227), `_toggle_cursor_block` (3522), `_toggle_
 - "Whose clip is this": `clip_is_owned` (655). Foreground process name: `process_name` (1033).
 
 ## Traps
+- **Holding every full-screen app was the wrong default** (v1.1.7). "Borderless and covering
+  the display" describes a full-screen browser, video player or PDF reader exactly as well as
+  a game, and those want the opposite - to reach the other screens. `cursor_never_lock` was
+  the mitigation and it only ever grew: mstsc, explorer, two snip hosts, and every browser
+  would have been next. Reported by the owner full-screening a browser and being stuck on one
+  monitor with no visible cause. Holding is now opt-in via `cursor_lock_apps`. **A flipped
+  default does not reach existing installs** - `save_config` writes the whole merged dict, so
+  a config saved before the change still holds `true`.
 - **Overwriting a game's own clip every two seconds** widened it back out and let the cursor escape
   mid mouse-look (5e5f7ef). Read the clip before writing it.
 - **Then deferring too readily sealed the user in.** Don't Starve exited leaving its clip behind;
